@@ -5,10 +5,13 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import { INITIAL_BALANCE } from "@/lib/constants";
 
+const adapter = PrismaAdapter(prisma);
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  // Only use adapter for OAuth providers (GitHub).
+  // Credentials provider manages users manually in authorize().
+  adapter,
   providers: [
-    // GitHub OAuth (for production)
     ...(process.env.AUTH_GITHUB_ID
       ? [
           GitHub({
@@ -18,7 +21,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }),
         ]
       : []),
-    // Demo credentials provider
     Credentials({
       name: "Demo Account",
       credentials: {
@@ -29,7 +31,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const name = credentials?.name as string;
           if (!name) return null;
 
-          // Find or create demo user
           const email = `${name.toLowerCase().replace(/\s+/g, "")}@demo.local`;
           let user = await prisma.user.findUnique({ where: { email } });
 
@@ -56,9 +57,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     strategy: "jwt",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async signIn({ user, account }) {
+      // Always allow credentials sign-in (user already created in authorize)
+      if (account?.provider === "credentials") return true;
+      // For OAuth, let adapter handle it
+      return true;
+    },
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
+      }
+      // For credentials, ensure token.id is set even if adapter didn't run
+      if (account?.provider === "credentials" && user?.id) {
+        token.id = user.id;
+        token.sub = user.id;
       }
       return token;
     },
@@ -86,7 +98,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   pages: {
     signIn: "/login",
+    error: "/login", // Redirect auth errors to login page instead of 500
   },
   trustHost: true,
-  debug: process.env.NODE_ENV === "development",
 });
