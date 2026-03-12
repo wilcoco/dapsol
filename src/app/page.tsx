@@ -8,7 +8,6 @@ import { Section2Workspace } from "@/components/section2/qa-workspace";
 import { NavigableKnowledgeMap } from "@/components/section5/navigable-knowledge-map";
 import { MyDashboard } from "@/components/section4/my-dashboard";
 import { AnswerGaps } from "@/components/section4/answer-gaps";
-import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import type { QASetWithMessages } from "@/types/qa-set";
@@ -176,17 +175,6 @@ export default function HomePage() {
     );
   }
 
-  // Onboarding for new users
-  if (session && !session.user.onboardingCompleted) {
-    return (
-      <OnboardingFlow
-        onComplete={() => {
-          // 세션 갱신하여 onboardingCompleted 반영
-          updateSession();
-        }}
-      />
-    );
-  }
 
   // Not logged in
   if (!session) {
