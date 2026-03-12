@@ -1,23 +1,20 @@
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import Credentials from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import { INITIAL_BALANCE } from "@/lib/constants";
 
-const adapter = PrismaAdapter(prisma);
+const useGitHub = !!(process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET);
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  // Only use adapter for OAuth providers (GitHub).
-  // Credentials provider manages users manually in authorize().
-  adapter,
+  // No adapter — we manage users manually and use JWT sessions only.
+  // PrismaAdapter conflicts with Credentials provider in NextAuth v5 beta.
   providers: [
-    ...(process.env.AUTH_GITHUB_ID
+    ...(useGitHub
       ? [
           GitHub({
-            clientId: process.env.AUTH_GITHUB_ID,
-            clientSecret: process.env.AUTH_GITHUB_SECRET,
-            allowDangerousEmailAccountLinking: true,
+            clientId: process.env.AUTH_GITHUB_ID!,
+            clientSecret: process.env.AUTH_GITHUB_SECRET!,
           }),
         ]
       : []),
@@ -57,20 +54,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     strategy: "jwt",
   },
   callbacks: {
-    async signIn({ user, account }) {
-      // Always allow credentials sign-in (user already created in authorize)
-      if (account?.provider === "credentials") return true;
-      // For OAuth, let adapter handle it
-      return true;
-    },
-    async jwt({ token, user, account }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-      }
-      // For credentials, ensure token.id is set even if adapter didn't run
-      if (account?.provider === "credentials" && user?.id) {
-        token.id = user.id;
-        token.sub = user.id;
       }
       return token;
     },
@@ -98,7 +84,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   pages: {
     signIn: "/login",
-    error: "/login", // Redirect auth errors to login page instead of 500
+    error: "/login",
   },
   trustHost: true,
 });
