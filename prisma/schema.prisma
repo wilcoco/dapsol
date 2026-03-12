@@ -109,10 +109,9 @@ model QASet {
   searchKeywords String?
 
   // Vector embedding for semantic search
-  embedding       String?  // JSON array of floats (legacy, for migration)
+  embedding       String?  // JSON array of floats (also saved as pgvector via raw SQL)
   embeddingModel  String?  // e.g. "text-embedding-3-small"
-  // pgvector native column — managed via raw SQL migration
-  embeddingVec    Unsupported("vector(1536)")?
+  // Note: embeddingVec vector(1536) column managed via raw SQL migration (1_pgvector)
 
   // Knowledge card (AI-extracted structured knowledge from conversation)
   knowledgeCard   String?  // JSON: { coreClaim, evidence[], conditions[], limitations[], confidence }

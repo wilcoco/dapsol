@@ -1,6 +1,3 @@
--- Enable pgvector extension for semantic search
-CREATE EXTENSION IF NOT EXISTS vector;
-
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
 
@@ -71,7 +68,6 @@ CREATE TABLE "QASet" (
     "searchKeywords" TEXT,
     "embedding" TEXT,
     "embeddingModel" TEXT,
-    "embeddingVec" vector(1536),
     "knowledgeCard" TEXT,
     "topicClusterId" TEXT,
     "creatorAuthorityStake" DOUBLE PRECISION NOT NULL DEFAULT 100,
@@ -485,8 +481,3 @@ ALTER TABLE "QASetTag" ADD CONSTRAINT "QASetTag_qaSetId_fkey" FOREIGN KEY ("qaSe
 
 -- AddForeignKey
 ALTER TABLE "QASetTag" ADD CONSTRAINT "QASetTag_tagId_fkey" FOREIGN KEY ("tagId") REFERENCES "Tag"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-
--- pgvector: Create IVFFlat index for cosine similarity search
-CREATE INDEX IF NOT EXISTS idx_qaset_embedding_vec ON "QASet"
-  USING ivfflat ("embeddingVec" vector_cosine_ops) WITH (lists = 100);

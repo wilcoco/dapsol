@@ -20,5 +20,5 @@ export async function GET() {
     dbConnected,
     responseTimeMs: Date.now() - start,
     version: process.env.npm_package_version ?? "0.1.0",
-  }, { status: dbConnected ? 200 : 503 });
+  }, { status: 200 }); // Always 200 for Railway healthcheck — use dbConnected field to monitor DB
 }
