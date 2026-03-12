@@ -1,0 +1,482 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// USER & AUTH
+// ─────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  // Trust point system
+  balance       Int       @default(10000)
+  trustLevel    Int       @default(1)
+
+  // HITS scores (쌍방향: 투자자=허브, 창작자=권위)
+  hubScore        Float   @default(1.0)   // 경작 안목 점수 — 좋은 Q&A를 먼저 발굴한 투자자 지수
+  authorityScore  Float   @default(100.0) // 창작 권위 점수 — 100 + (외부투자총액 / 공유QA수)
+
+  // Onboarding
+  onboardingCompleted Boolean @default(false)
+  interestTags        String? // JSON array of interest tag strings
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // NextAuth
+  accounts      Account[]
+  sessions      Session[]
+
+  // App relations
+  qaSets            QASet[]
+  investments       Investment[]
+  rewardEvents      RewardEvent[]    @relation("RewardRecipient")
+  improvedMessages  Message[]        @relation("ImprovedBy")
+  opinionNodes      OpinionNode[]
+  notifications     Notification[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────────
+// Q&A SETS & MESSAGES
+// ─────────────────────────────────────────────
+
+model QASet {
+  id          String   @id @default(cuid())
+  title       String?
+  summary     String?
+
+  creatorId   String
+  creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  // Fork tree
+  parentQASetId      String?
+  parentQASet        QASet?   @relation("QASetForks", fields: [parentQASetId], references: [id])
+  forks              QASet[]  @relation("QASetForks")
+  parentMessageCount Int      @default(0)  // 확장 시 복사된 부모 메시지 수 (0 = 원본)
+
+  // Sharing / Publishing
+  isShared    Boolean  @default(false)
+  sharedAt    DateTime?
+
+  // Multilingual search index (AI-generated on share: Korean + English + synonyms)
+  searchKeywords String?
+
+  // Vector embedding for semantic search
+  embedding       String?  // JSON array of floats (legacy, for migration)
+  embeddingModel  String?  // e.g. "text-embedding-3-small"
+  // pgvector native column — managed via raw SQL migration
+  embeddingVec    Unsupported("vector(1536)")?
+
+  // Knowledge card (AI-extracted structured knowledge from conversation)
+  knowledgeCard   String?  // JSON: { coreClaim, evidence[], conditions[], limitations[], confidence }
+
+  // Topic cluster membership
+  topicClusterId  String?
+  topicCluster    TopicCluster? @relation(fields: [topicClusterId], references: [id])
+
+  // Creator Authority stake (공유 시점 창작자 Authority 스냅샷 — 경작 지분 역할)
+  creatorAuthorityStake Float @default(100) // 공유 당시 creator.authorityScore
+
+  // HITS authority
+  authorityScore  Float   @default(0.0)  // 콘텐츠 품질 점수
+  qualityPool     Int     @default(0)    // 성장 풀 (경작 마일스톤에서 해제)
+
+  // Optimistic concurrency
+  version          Int   @default(0)
+
+  // Metrics
+  burnedAmount     Int   @default(0)    // 총 소각된 포인트
+  totalInvested    Int   @default(0)
+  investorCount    Int   @default(0)
+  negativeInvested Int   @default(0)    // 사냥 총액
+  negativeCount    Int   @default(0)    // 사냥꾼 수
+  negativePool     Int   @default(0)    // 사냥 풀 (사냥 마일스톤에서 해제)
+  viewCount        Int   @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  messages    Message[]
+  investments Investment[]
+  tags        QASetTag[]
+
+  // Knowledge graph: this QASet as source/target of relationships
+  relationsAsSource  NodeRelation[] @relation("RelationSource")
+  relationsAsTarget  NodeRelation[] @relation("RelationTarget")
+
+  @@index([creatorId])
+  @@index([isShared, sharedAt])
+  @@index([isShared, totalInvested])
+  @@index([topicClusterId])
+}
+
+model Message {
+  id              String   @id @default(cuid())
+  qaSetId         String
+  qaSet           QASet    @relation(fields: [qaSetId], references: [id], onDelete: Cascade)
+
+  role            String   // "user" | "assistant" | "system"
+  content         String
+  originalContent String?  // preserved when improved
+
+  isImproved      Boolean  @default(false)
+  improvedById    String?
+  improvedBy      User?    @relation("ImprovedBy", fields: [improvedById], references: [id])
+  improvedAt      DateTime?
+  improvementNote String?
+
+  // Insight detection (AI가 "인간 고유 지식"으로 판별한 메시지)
+  isInsight          Boolean  @default(false)
+  insightReason      String?  // AI 판별 사유
+  insightDetectedAt  DateTime?
+
+  // 후속 질문 관계 라벨 (첫 번째 질문은 null)
+  // 간단 7종: 명확화|더깊게|근거|검증|반박|적용|정리
+  relationSimple  String?
+  // 전문가: Q1→Q2 질문 전개 유형
+  relationQ1Q2    String?
+  // 전문가: A1→Q2 대답 트리거 유형
+  relationA1Q2    String?
+  // 입장: 수용|중립|도전
+  relationStance  String?
+
+  // 지식 갭 추적 (AI가 인간에게 질문한 내용)
+  gapQuestionId   String?   // 이 메시지가 관련된 KnowledgeGap ID
+  isGapResponse   Boolean  @default(false) // 사용자가 갭 질문에 응답한 메시지인지
+
+  isHumanAuthored  Boolean  @default(false)  // true = 인간이 직접 작성한 답변
+  authorUserId     String?   // 인간 답변 작성자 ID
+
+  orderIndex      Int
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([qaSetId, orderIndex])
+}
+
+// ─────────────────────────────────────────────
+// INVESTMENT & REWARDS
+// ─────────────────────────────────────────────
+
+model Investment {
+  id          String   @id @default(cuid())
+  qaSetId     String
+  qaSet       QASet    @relation(fields: [qaSetId], references: [id], onDelete: Cascade)
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount      Int
+  position    Int      // chronological position (1-indexed)
+  isActive    Boolean  @default(true)
+  isNegative  Boolean  @default(false)  // true = 사냥 (오류 발견)
+  comment     String?  // 경작자/사냥꾼 한줄 코멘트
+
+  // HITS-weighted
+  effectiveAmount  Float  @default(0)   // sqrt(amount) × hub at investment time
+  cumulativeReward Int    @default(0)   // 누적 보상 (상한 추적용)
+
+  huntingReason           String?   // 사냥 사유: hallucination, outdated_info, incorrect_fact, missing_nuance, source_mismatch, logical_fallacy, overgeneralization
+  huntingEvidence          String?   // 사냥 근거 (최대 500자)
+  huntingTargetMessageId   String?   // 문제가 있는 특정 메시지 ID
+
+  createdAt   DateTime @default(now())
+
+  // Rewards generated from this investment (to prior investors)
+  rewardEvents RewardEvent[]
+
+  @@index([qaSetId, position])
+  @@index([userId])
+}
+
+model RewardEvent {
+  id              String   @id @default(cuid())
+  recipientId     String
+  recipient       User     @relation("RewardRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  amount          Int
+  qaSetId         String
+
+  // Which investment triggered this reward
+  sourceInvestmentId String
+  sourceInvestment   Investment @relation(fields: [sourceInvestmentId], references: [id], onDelete: Cascade)
+
+  rewardType      String   // "proportional_distribution"
+
+  createdAt       DateTime @default(now())
+
+  @@index([recipientId, createdAt])
+  @@index([qaSetId])
+}
+
+// ─────────────────────────────────────────────
+// KNOWLEDGE GRAPH
+// ─────────────────────────────────────────────
+
+// User opinion node (non-AI, user-created content node)
+model OpinionNode {
+  id          String   @id @default(cuid())
+  content     String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Graph relations
+  relationsAsSource  NodeRelation[] @relation("OpinionRelationSource")
+  relationsAsTarget  NodeRelation[] @relation("OpinionRelationTarget")
+
+  @@index([userId])
+}
+
+// Relationship between any two nodes (QASet or OpinionNode)
+model NodeRelation {
+  id              String   @id @default(cuid())
+
+  // Source node (either QASet or OpinionNode)
+  sourceQASetId       String?
+  sourceQASet         QASet?       @relation("RelationSource", fields: [sourceQASetId], references: [id], onDelete: Cascade)
+  sourceOpinionId     String?
+  sourceOpinion       OpinionNode? @relation("OpinionRelationSource", fields: [sourceOpinionId], references: [id], onDelete: Cascade)
+
+  // Target node (either QASet or OpinionNode)
+  targetQASetId       String?
+  targetQASet         QASet?       @relation("RelationTarget", fields: [targetQASetId], references: [id], onDelete: Cascade)
+  targetOpinionId     String?
+  targetOpinion       OpinionNode? @relation("OpinionRelationTarget", fields: [targetOpinionId], references: [id], onDelete: Cascade)
+
+  // Relationship type
+  relationType    String   // "generalization" | "specialization" | "counterargument" | "evidence" | "elaboration" | "analogy" | "cause_effect" | "prerequisite" | "custom"
+  customLabel     String?  // for "custom" type
+  isAIGenerated   Boolean  @default(true)
+  isUserModified  Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+
+  @@index([sourceQASetId])
+  @@index([targetQASetId])
+  @@index([sourceOpinionId])
+  @@index([targetOpinionId])
+}
+
+// ─────────────────────────────────────────────
+// KNOWLEDGE SYSTEM (주제 클러스터, 진화, 격차, 기여)
+// ─────────────────────────────────────────────
+
+model TopicCluster {
+  id                String    @id @default(cuid())
+  name              String                          // AI-generated topic name
+  nameEn            String?                         // English version
+  description       String?
+  centroidEmbedding String?                         // JSON array of floats (average of member embeddings)
+  synthesisText     String?                         // AI-generated synthesis (markdown)
+  synthesizedAt     DateTime?
+
+  qaSets            QASet[]
+  knowledgeGaps     KnowledgeGap[]
+  evolutionEvents   KnowledgeEvolutionEvent[]
+  contributions     UserTopicContribution[]
+
+  clusterRelationsAsSource  ClusterRelation[] @relation("ClusterRelationSource")
+  clusterRelationsAsTarget  ClusterRelation[] @relation("ClusterRelationTarget")
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([name])
+}
+
+model ClusterRelation {
+  id                String   @id @default(cuid())
+
+  sourceClusterId   String
+  sourceCluster     TopicCluster @relation("ClusterRelationSource", fields: [sourceClusterId], references: [id], onDelete: Cascade)
+  targetClusterId   String
+  targetCluster     TopicCluster @relation("ClusterRelationTarget", fields: [targetClusterId], references: [id], onDelete: Cascade)
+
+  relationType      String   // "generalization" | "specialization" | "counterargument" | "evidence" | "elaboration" | "analogy" | "cause_effect" | "prerequisite" | "contradiction" | "extension"
+  weight            Float    @default(1.0)
+  label             String?  // Korean display label
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([sourceClusterId, targetClusterId, relationType])
+  @@index([sourceClusterId])
+  @@index([targetClusterId])
+}
+
+model KnowledgeEvolutionEvent {
+  id              String   @id @default(cuid())
+  topicClusterId  String
+  topicCluster    TopicCluster @relation(fields: [topicClusterId], references: [id], onDelete: Cascade)
+
+  qaSetId         String
+  userId          String
+
+  eventType       String   // "initial_question" | "new_perspective" | "rebuttal" | "evidence" | "synthesis" | "refinement"
+  description     String
+
+  createdAt       DateTime @default(now())
+
+  @@index([topicClusterId, createdAt])
+  @@index([qaSetId])
+  @@index([userId])
+}
+
+model KnowledgeGap {
+  id              String   @id @default(cuid())
+  topicClusterId  String
+  topicCluster    TopicCluster @relation(fields: [topicClusterId], references: [id], onDelete: Cascade)
+
+  gapType         String   // "uncertain_answer" | "inconsistency" | "missing_evidence" | "conflicting_claims"
+  description     String
+  affectedQASetIds String  // JSON array of QASet IDs
+  severity        String   @default("medium") // "low" | "medium" | "high"
+  isResolved      Boolean  @default(false)
+  resolvedByQASetId String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([topicClusterId, isResolved])
+}
+
+model UserTopicContribution {
+  id                  String   @id @default(cuid())
+  userId              String
+  topicClusterId      String
+  topicCluster        TopicCluster @relation(fields: [topicClusterId], references: [id], onDelete: Cascade)
+
+  questionsAsked      Int @default(0)
+  answersImproved     Int @default(0)
+  insightsContributed Int @default(0)
+  rebuttalsProvided   Int @default(0)
+  evidenceAdded       Int @default(0)
+
+  topicAuthority      Float @default(0.0)
+
+  lastContributedAt   DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId, topicClusterId])
+  @@index([userId])
+  @@index([topicClusterId, topicAuthority])
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        String   // "investment_received" | "reward_earned" | "milestone" | "hunt_received" | "quality_pool_release"
+  title       String
+  body        String
+  link        String?  // e.g. "/?qaSetId=xxx"
+  isRead      Boolean  @default(false)
+
+  // Optional reference to related entities
+  qaSetId     String?
+  investmentId String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([userId, isRead, createdAt])
+}
+
+// ─────────────────────────────────────────────
+// TAGS
+// ─────────────────────────────────────────────
+
+model Tag {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  slug       String   @unique
+  usageCount Int      @default(0)
+
+  qaSets     QASetTag[]
+
+  @@index([slug])
+}
+
+model QASetTag {
+  qaSetId String
+  qaSet   QASet  @relation(fields: [qaSetId], references: [id], onDelete: Cascade)
+  tagId   String
+  tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([qaSetId, tagId])
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String   // "invest", "uninvest", "share", "hunt", "reward", "burn", "milestone"
+  userId    String
+  qaSetId   String?
+  amount    Int?
+  metadata  String?  // JSON details
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([qaSetId, createdAt])
+  @@index([action, createdAt])
+}
