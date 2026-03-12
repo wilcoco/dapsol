@@ -7,6 +7,9 @@ export async function GET() {
   const start = Date.now();
   let dbConnected = false;
 
+  let tablesExist = false;
+  let userCount = -1;
+
   try {
     await prisma.$queryRaw`SELECT 1`;
     dbConnected = true;
@@ -14,11 +17,23 @@ export async function GET() {
     dbConnected = false;
   }
 
+  if (dbConnected) {
+    try {
+      const result = await prisma.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint as count FROM "User"`;
+      tablesExist = true;
+      userCount = Number(result[0]?.count ?? 0);
+    } catch (e) {
+      tablesExist = false;
+    }
+  }
+
   return NextResponse.json({
     status: dbConnected ? "healthy" : "degraded",
     timestamp: new Date().toISOString(),
     dbConnected,
+    tablesExist,
+    userCount,
     responseTimeMs: Date.now() - start,
     version: process.env.npm_package_version ?? "0.1.0",
-  }, { status: 200 }); // Always 200 for Railway healthcheck — use dbConnected field to monitor DB
+  }, { status: 200 });
 }
