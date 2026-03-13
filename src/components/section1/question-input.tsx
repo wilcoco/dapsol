@@ -5,8 +5,10 @@ import { useSession } from "next-auth/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, Loader2, TrendingUp, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Loader2, TrendingUp, ExternalLink, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { QASetCardData, ScoreDetail } from "@/types/qa-set";
+import { ActivityFeed } from "@/components/section1/activity-feed";
+import { MiniMap } from "@/components/section1/mini-map";
 
 interface Section1Props {
   onNewQuestion: (question: string) => void;
@@ -32,10 +34,21 @@ interface KnowledgeGap {
   topicCluster: { id: string; name: string };
 }
 
+interface TagItem {
+  id: string;
+  name: string;
+  slug: string;
+  count: number;
+}
+
 export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswerGap, onNavigateToMap }: Section1Props) {
   const { data: session } = useSession();
   const [question, setQuestion] = useState("");
   const [trendingQAs, setTrendingQAs] = useState<QASetCardData[]>([]);
+  const [seedlingQAs, setSeedlingQAs] = useState<QASetCardData[]>([]);
+  const [allTrendingQAs, setAllTrendingQAs] = useState<QASetCardData[]>([]);
+  const [popularTags, setPopularTags] = useState<TagItem[]>([]);
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [search, setSearch] = useState<SearchState | null>(null);
@@ -46,18 +59,59 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
   const inputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load trending QAs + AI questions on mount
+  // Load all home data on mount
   useEffect(() => {
-    fetch("/api/qa-sets?shared=true&sort=trending&limit=10")
+    // Trending QAs
+    fetch("/api/qa-sets?shared=true&sort=trending&limit=20")
       .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d) setTrendingQAs(d.qaSets ?? []); })
+      .then((d) => {
+        if (d) {
+          const qas = d.qaSets ?? [];
+          setAllTrendingQAs(qas);
+          setTrendingQAs(qas.slice(0, 10));
+        }
+      })
       .catch(() => {});
 
+    // Seedling QAs (new within 48h)
+    fetch("/api/qa-sets?shared=true&sort=recent&limit=5")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d) {
+          const now = Date.now();
+          const h48 = 48 * 60 * 60 * 1000;
+          const fresh = (d.qaSets ?? []).filter(
+            (qa: any) => now - new Date(qa.createdAt).getTime() < h48
+          );
+          setSeedlingQAs(fresh.slice(0, 5));
+        }
+      })
+      .catch(() => {});
+
+    // AI questions (🤖→👤)
     fetch("/api/knowledge-gaps")
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d?.gaps) setAiQuestions(d.gaps.slice(0, 3)); })
       .catch(() => {});
+
+    // Tags for cluster filter
+    fetch("/api/tags")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => d && setPopularTags(d.tags ?? []))
+      .catch(() => {});
   }, []);
+
+  // Tag filter
+  useEffect(() => {
+    if (!activeTag) {
+      setTrendingQAs(allTrendingQAs.slice(0, 10));
+    } else {
+      const filtered = allTrendingQAs.filter((qa) =>
+        qa.tags?.some(({ tag }) => (tag as any).slug === activeTag || tag.name === activeTag)
+      );
+      setTrendingQAs(filtered);
+    }
+  }, [activeTag, allTrendingQAs]);
 
   const triggerFrontierToast = () => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -69,7 +123,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
     }, 2000);
   };
 
-  // Search existing QA
+  // Search
   const handleSearch = async (page = 1) => {
     if (!question.trim() || isSearching) return;
     setIsSearching(true);
@@ -97,7 +151,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
     }
   };
 
-  // Ask AI directly
+  // Ask AI
   const handleAskAI = async () => {
     if (!question.trim() || isSubmitting) return;
     setIsSubmitting(true);
@@ -120,7 +174,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
     window.scrollTo({ top: 0 });
   };
 
-  // Inline quick cultivate (invest 10 points)
+  // Inline quick cultivate (10 points)
   const handleQuickCultivate = useCallback(async (e: React.MouseEvent, qaSetId: string) => {
     e.stopPropagation();
     if (!session?.user?.id || cultivatingId) return;
@@ -132,14 +186,13 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
         body: JSON.stringify({ amount: 10, isNegative: false }),
       });
       if (res.ok) {
-        // Update the local count
-        setTrendingQAs((prev) =>
+        const updateQA = (prev: QASetCardData[]) =>
           prev.map((qa) =>
-            qa.id === qaSetId
-              ? { ...qa, totalInvested: qa.totalInvested + 10 }
-              : qa
-          )
-        );
+            qa.id === qaSetId ? { ...qa, totalInvested: qa.totalInvested + 10 } : qa
+          );
+        setTrendingQAs(updateQA);
+        setAllTrendingQAs(updateQA);
+        setSeedlingQAs(updateQA);
       }
     } catch {
       // ignore
@@ -150,11 +203,18 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
 
   const showTrending = !search;
 
+  // Helper: check if investments are active (recent + high activity)
+  const hasRecentActivity = (qa: QASetCardData) => {
+    const diff = Date.now() - new Date(qa.createdAt).getTime();
+    const isRecent = diff < 24 * 60 * 60 * 1000; // 24시간 이내
+    return isRecent && qa.investorCount >= 3; // 최근 + 경작자 3명 이상
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden relative pb-14 md:pb-0">
 
-      {/* ── Input Area ── */}
-      <div className={`shrink-0 border-b bg-muted/20 transition-all duration-300 ${search ? "px-6 py-4" : "px-6 py-8"}`}>
+      {/* ── Header: Search bar ── */}
+      <div className={`shrink-0 border-b bg-muted/20 transition-all duration-300 ${search ? "px-6 py-4" : "px-6 py-6"}`}>
         <div className="max-w-2xl mx-auto space-y-3">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none z-10" />
@@ -171,8 +231,6 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
               disabled={isSubmitting}
             />
           </div>
-
-          {/* Two buttons: Search + Ask AI */}
           <div className="flex gap-2.5">
             <Button
               onClick={() => handleSearch(1)}
@@ -199,7 +257,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-6 py-5">
 
-          {/* ── Search Results ── */}
+          {/* ══════ Search Results ══════ */}
           {search && (
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -220,10 +278,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                 <div className="flex items-center gap-1.5 mb-4 flex-wrap">
                   <span className="text-[10px] text-muted-foreground/70">AI 확장:</span>
                   {search.expandedTerms.slice(0, 8).map((term, i) => (
-                    <span
-                      key={i}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800"
-                    >
+                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
                       +{term}
                     </span>
                   ))}
@@ -242,37 +297,12 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                         onCultivate={handleQuickCultivate}
                         cultivatingId={cultivatingId}
                         isLoggedIn={!!session?.user?.id}
+                        showActivityBadge={hasRecentActivity(qa)}
                       />
                     ))}
                   </div>
-
                   {search.totalPages > 1 && (
-                    <div className="flex items-center justify-center gap-2 mt-6 pt-4 border-t">
-                      <Button variant="outline" size="sm" disabled={search.page <= 1} onClick={() => handlePage(search.page - 1)} className="gap-1">
-                        <ChevronLeft className="h-3.5 w-3.5" /> 이전
-                      </Button>
-                      <div className="flex gap-1">
-                        {Array.from({ length: search.totalPages }, (_, i) => i + 1)
-                          .filter((p) => p === 1 || p === search.totalPages || Math.abs(p - search.page) <= 1)
-                          .reduce<(number | "...")[]>((acc, p, idx, arr) => {
-                            if (idx > 0 && (arr[idx - 1] as number) + 1 < p) acc.push("...");
-                            acc.push(p);
-                            return acc;
-                          }, [])
-                          .map((p, idx) =>
-                            p === "..." ? (
-                              <span key={`ellipsis-${idx}`} className="px-2 text-muted-foreground text-sm self-center">…</span>
-                            ) : (
-                              <Button key={p} variant={p === search.page ? "default" : "outline"} size="sm" className="w-8 h-8 p-0 text-xs" onClick={() => handlePage(p as number)}>
-                                {p}
-                              </Button>
-                            )
-                          )}
-                      </div>
-                      <Button variant="outline" size="sm" disabled={search.page >= search.totalPages} onClick={() => handlePage(search.page + 1)} className="gap-1">
-                        다음 <ChevronRight className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                    <Pagination search={search} onPage={handlePage} />
                   )}
                 </>
               ) : (
@@ -288,23 +318,60 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
             </div>
           )}
 
-          {/* ── Home (before search) ── */}
+          {/* ══════ Home Feed (Julie Zhuo layout) ══════ */}
           {showTrending && (
             <div>
 
-              {/* 🤖→👤 AI가 인간에게 묻는 질문 */}
+              {/* ── Section 0: Mini Knowledge Map (상단 30% — 서비스 정체성) ── */}
+              <MiniMap onNavigateToMap={onNavigateToMap} />
+
+              {/* ── Section 0.5: Live Pulse (2단계 반영) ── */}
+              <ActivityFeed onSelectQASet={onSelectSharedQA} />
+
+              {/* ── Cluster Filter Chips ── */}
+              {popularTags.length > 0 && (
+                <div className="flex items-center gap-1.5 mb-5 overflow-x-auto pb-1 scrollbar-hide">
+                  <button
+                    onClick={() => setActiveTag(null)}
+                    className={`shrink-0 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      activeTag === null
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                    }`}
+                  >
+                    전체
+                  </button>
+                  {popularTags.slice(0, 8).map((tag) => (
+                    <button
+                      key={tag.id}
+                      onClick={() => setActiveTag(activeTag === tag.name ? null : tag.name)}
+                      className={`shrink-0 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        activeTag === tag.name
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                      }`}
+                    >
+                      {tag.name}
+                      <span className="ml-1 opacity-60">{tag.count}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* ── 🤖→👤 전문가를 찾고 있는 질문 (Julie Zhuo: 서비스의 UNIQUE 섹션) ── */}
               {aiQuestions.length > 0 && (
                 <div className="mb-6">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-base font-bold">🤖→👤</span>
-                    <span className="text-sm font-semibold">AI가 인간에게 묻고 있어요</span>
+                    <span className="text-sm font-semibold">전문가를 찾고 있는 질문</span>
+                    <span className="text-[10px] text-muted-foreground">경험이 있다면 기여해주세요</span>
                   </div>
                   <div className="space-y-2">
                     {aiQuestions.map((gap) => (
                       <button
                         key={gap.id}
                         onClick={() => onAnswerGap ? onAnswerGap(gap.id, gap.description) : setQuestion(gap.description)}
-                        className="w-full text-left p-3 rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 hover:border-primary/60 hover:bg-primary/10 transition-all group"
+                        className="w-full text-left p-3.5 rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 hover:border-primary/60 hover:bg-primary/10 transition-all group"
                       >
                         <div className="flex items-start gap-3">
                           <span className="text-lg shrink-0 mt-0.5">
@@ -312,9 +379,9 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                           </span>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium leading-snug">{gap.description}</p>
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-2 mt-1.5">
                               <span className="text-[10px] text-muted-foreground">{gap.topicCluster.name}</span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
                                 gap.severity === "high"
                                   ? "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
                                   : gap.severity === "medium"
@@ -335,13 +402,66 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                 </div>
               )}
 
-              {/* Trending Q&A with inline cultivate */}
+              {/* ── 🌱 새로 공유된 Q&A (48시간 이내 — Seedling Area) ── */}
+              {seedlingQAs.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-base">🌱</span>
+                    <h3 className="text-sm font-semibold">새로 공유된 Q&A</h3>
+                    <span className="text-[10px] text-muted-foreground">48시간 이내 · 첫 경작자가 되어보세요</span>
+                  </div>
+                  <div className="space-y-1">
+                    {seedlingQAs.map((qa) => (
+                      <div
+                        key={qa.id}
+                        className="group flex items-center gap-3 py-2.5 px-3 -mx-3 rounded-lg cursor-pointer hover:bg-green-50/50 dark:hover:bg-green-950/20 transition-colors"
+                        onClick={() => onSelectSharedQA(qa.id)}
+                      >
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 font-medium shrink-0">NEW</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
+                            {qa.title ?? "제목 없음"}
+                          </p>
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                            <span>{qa.creator?.name ?? "익명"}</span>
+                            {qa.tags && qa.tags.length > 0 && (
+                              <span>· {qa.tags[0].tag.name}</span>
+                            )}
+                          </div>
+                        </div>
+                        {session?.user?.id && (
+                          <button
+                            onClick={(e) => handleQuickCultivate(e, qa.id)}
+                            disabled={cultivatingId === qa.id}
+                            className="shrink-0 text-xs px-2.5 py-1 rounded-full border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/50 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                            title="첫 경작자 되기"
+                          >
+                            {cultivatingId === qa.id ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "🌾 첫 경작"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── 🔥 트렌딩 Q&A (인라인 경작 + 활발 표시) ── */}
               {trendingQAs.length > 0 ? (
                 <>
                   <div className="flex items-center gap-2 mb-4">
                     <TrendingUp className="h-4 w-4 text-orange-500" />
-                    <h3 className="text-sm font-semibold">인기 Q&A</h3>
-                    <span className="text-xs text-muted-foreground">커뮤니티가 만든 지식</span>
+                    <h3 className="text-sm font-semibold">트렌딩 Q&A</h3>
+                    <span className="text-xs text-muted-foreground">
+                      {activeTag ? `"${activeTag}" 태그` : "커뮤니티가 만든 지식"}
+                    </span>
+                    {activeTag && (
+                      <button
+                        onClick={() => setActiveTag(null)}
+                        className="text-xs text-muted-foreground hover:text-foreground ml-auto"
+                      >
+                        ✕ 필터 해제
+                      </button>
+                    )}
                   </div>
                   <div className="divide-y divide-border/50">
                     {trendingQAs.map((qa, i) => (
@@ -353,10 +473,19 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                         onCultivate={handleQuickCultivate}
                         cultivatingId={cultivatingId}
                         isLoggedIn={!!session?.user?.id}
+                        showActivityBadge={hasRecentActivity(qa)}
                       />
                     ))}
                   </div>
                 </>
+              ) : activeTag ? (
+                <div className="text-center py-10 text-muted-foreground space-y-2">
+                  <div className="text-4xl">🏷️</div>
+                  <p className="font-medium">"{activeTag}" 태그가 달린 Q&A가 없습니다</p>
+                  <button onClick={() => setActiveTag(null)} className="text-xs text-primary hover:underline">
+                    전체 보기
+                  </button>
+                </div>
               ) : (
                 <div className="text-center py-16 text-muted-foreground space-y-4">
                   <div className="text-5xl">💬</div>
@@ -383,6 +512,17 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
 
         </div>
       </div>
+
+      {/* ── FAB: 새 질문하기 (Julie Zhuo) ── */}
+      {showTrending && (
+        <button
+          onClick={() => inputRef.current?.focus()}
+          className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center"
+          title="새 질문하기"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+      )}
 
       {/* ── Frontier Toast ── */}
       {showFrontierToast && (
@@ -425,27 +565,64 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
   );
 }
 
-// ── Q&A List Item with inline cultivate button ──
+// ── Pagination Component ──
+function Pagination({ search, onPage }: { search: SearchState; onPage: (p: number) => void }) {
+  return (
+    <div className="flex items-center justify-center gap-2 mt-6 pt-4 border-t">
+      <Button variant="outline" size="sm" disabled={search.page <= 1} onClick={() => onPage(search.page - 1)} className="gap-1">
+        <ChevronLeft className="h-3.5 w-3.5" /> 이전
+      </Button>
+      <div className="flex gap-1">
+        {Array.from({ length: search.totalPages }, (_, i) => i + 1)
+          .filter((p) => p === 1 || p === search.totalPages || Math.abs(p - search.page) <= 1)
+          .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+            if (idx > 0 && (arr[idx - 1] as number) + 1 < p) acc.push("...");
+            acc.push(p);
+            return acc;
+          }, [])
+          .map((p, idx) =>
+            p === "..." ? (
+              <span key={`ellipsis-${idx}`} className="px-2 text-muted-foreground text-sm self-center">…</span>
+            ) : (
+              <Button key={p} variant={p === search.page ? "default" : "outline"} size="sm" className="w-8 h-8 p-0 text-xs" onClick={() => onPage(p as number)}>
+                {p}
+              </Button>
+            )
+          )}
+      </div>
+      <Button variant="outline" size="sm" disabled={search.page >= search.totalPages} onClick={() => onPage(search.page + 1)} className="gap-1">
+        다음 <ChevronRight className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+// ── Q&A List Item (인라인 경작 + 활발 표시 + 신뢰도) ──
 function SearchResultItem({
   qa,
   index,
   onClick,
-  relevanceWeight,
   onCultivate,
   cultivatingId,
   isLoggedIn,
+  showActivityBadge,
 }: {
   qa: QASetCardData;
   index: number;
   onClick: () => void;
-  relevanceWeight?: number;
   onCultivate?: (e: React.MouseEvent, qaSetId: string) => void;
   cultivatingId?: string | null;
   isLoggedIn?: boolean;
+  showActivityBadge?: boolean;
 }) {
   const firstAnswer = qa.messages?.[0]?.content ?? qa.summary ?? null;
   const score = qa.scoreDetail;
   const isCultivating = cultivatingId === qa.id;
+
+  // Trust progress: positive ratio based on investments
+  const totalInv = qa.totalInvested ?? 0;
+  const investorCount = qa.investorCount ?? 0;
+  const trustPercent = totalInv > 0 ? Math.min(100, Math.round((totalInv / (totalInv + 50)) * 100)) : 0;
 
   return (
     <div
@@ -464,8 +641,13 @@ function SearchResultItem({
           )}
         </span>
         <span className="text-xs text-muted-foreground ml-auto shrink-0 flex items-center gap-2">
-          <span title="경작 포인트">🌾 {qa.totalInvested}</span>
-          <span title="경작한 사람">{qa.investorCount}명</span>
+          {showActivityBadge && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-600 dark:text-orange-400 font-medium animate-pulse">
+              경작 활발
+            </span>
+          )}
+          <span title="경작 포인트">🌾 {totalInv}</span>
+          <span title="경작한 사람">{investorCount}명</span>
         </span>
       </div>
 
@@ -489,15 +671,24 @@ function SearchResultItem({
         </p>
       )}
 
-      {/* Bottom row: scores + inline cultivate button */}
-      <div className="flex items-center gap-2 mt-2">
-        {score && (
-          <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-1">
-            <span className="font-medium text-foreground tabular-nums" title="종합 점수">📊 {score.total}점</span>
-            <span title="관련성">🎯 {score.relevance}</span>
-            <span title="경작">🌾 {score.invest}</span>
+      {/* Trust progress bar (2단계 반영) + inline cultivate */}
+      <div className="flex items-center gap-3 mt-2.5">
+        {/* Trust bar */}
+        <div className="flex-1 flex items-center gap-2">
+          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden max-w-[120px]">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${trustPercent}%`,
+                backgroundColor: trustPercent > 70 ? "#22c55e" : trustPercent > 40 ? "#eab308" : "#94a3b8",
+              }}
+            />
           </div>
-        )}
+          <span className="text-[10px] text-muted-foreground tabular-nums">{trustPercent}%</span>
+          {score && (
+            <span className="text-[10px] text-muted-foreground" title="종합 점수">📊 {score.total}</span>
+          )}
+        </div>
 
         {/* Inline cultivate button */}
         {isLoggedIn && onCultivate && (
@@ -507,11 +698,7 @@ function SearchResultItem({
             className="shrink-0 text-xs px-3 py-1.5 rounded-full border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors disabled:opacity-50"
             title="10포인트 경작하기"
           >
-            {isCultivating ? (
-              <Loader2 className="h-3 w-3 animate-spin inline" />
-            ) : (
-              "🌾 경작"
-            )}
+            {isCultivating ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "🌾 경작"}
           </button>
         )}
       </div>
