@@ -1,22 +1,10 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { calculateEffectiveAmount } from "@/lib/engine/reward-calculator";
 import { recalculateUserScores } from "@/lib/engine/hits";
-import {
-  generateEmbedding,
-  assembleTextForEmbedding,
-  EMBEDDING_MODEL,
-} from "@/lib/search/embedding";
-import { extractKnowledgeCard } from "@/lib/knowledge/knowledge-card";
-import { autoLinkQASet } from "@/lib/knowledge/auto-linker";
-import { assignToCluster } from "@/lib/knowledge/clustering";
-import { recordContribution } from "@/lib/knowledge/contribution-tracker";
-import { suggestGapsToCreator } from "@/lib/knowledge/gap-suggestions";
-import { checkAndResolveGaps } from "@/lib/knowledge/gap-resolver";
-import { aggregateClusterRelationsForQASet } from "@/lib/knowledge/cluster-relations";
-import { enqueueJobs } from "@/lib/background/job-queue";
+import { enqueueJobs } from "@/lib/background/pg-job-queue";
+import "@/lib/background/job-handlers-init";
 
 // POST /api/qa-sets/[id]/share - Share a Q&A set with Authority-capped self-investment
 export async function POST(
@@ -108,33 +96,20 @@ export async function POST(
   // Authority 재계산 (공유 QA 수 증가 + 자기투자 반영)
   recalculateUserScores(prisma, session.user.id).catch(() => {});
 
-  // Background jobs with proper dependency ordering and retry
-  const userId = session.user.id;
-  const title = qaSet.title;
-  const msgs = qaSet.messages;
-
+  // Persistent background jobs with dependency ordering
   enqueueJobs(id, [
-    { name: "generateKeywords", fn: () => generateAndSaveKeywords(id, title, msgs) },
-    { name: "generateEmbedding", fn: () => generateAndSaveEmbedding(id, title, msgs) },
-    { name: "extractKnowledge", fn: () => extractKnowledgeCard(id, title, msgs) },
-    { name: "autoLink", fn: () => autoLinkQASet(id), dependsOn: ["generateEmbedding"] },
+    { name: "generateKeywords", payload: { qaSetId: id } },
+    { name: "generateEmbedding", payload: { qaSetId: id } },
+    { name: "extractKnowledge", payload: { qaSetId: id } },
+    { name: "autoLink", payload: { qaSetId: id }, dependsOn: ["generateEmbedding"] },
     {
       name: "assignCluster",
-      fn: async () => {
-        const clusterId = await assignToCluster(id);
-        if (clusterId) {
-          await Promise.allSettled([
-            recordContribution(userId, id, "question", title ?? undefined),
-            suggestGapsToCreator(id, userId),
-            checkAndResolveGaps(id, clusterId),
-          ]);
-        }
-      },
+      payload: { qaSetId: id, userId: session.user.id, title: qaSet.title },
       dependsOn: ["generateEmbedding"],
     },
     {
       name: "aggregateRelations",
-      fn: () => aggregateClusterRelationsForQASet(id),
+      payload: { qaSetId: id },
       dependsOn: ["autoLink", "assignCluster"],
     },
   ]);
@@ -146,71 +121,3 @@ export async function POST(
   });
 }
 
-// Claude를 이용해 한국어 + 영어 키워드 생성 후 저장
-async function generateAndSaveKeywords(
-  qaSetId: string,
-  title: string | null,
-  messages: { role: string; content: string }[]
-) {
-  try {
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-    const firstUser = messages.find((m) => m.role === "user")?.content ?? "";
-    const firstAssistant = messages.find((m) => m.role === "assistant")?.content ?? "";
-    const context = [
-      title ? `제목: ${title}` : "",
-      firstUser ? `질문: ${firstUser.slice(0, 300)}` : "",
-      firstAssistant ? `답변 요약: ${firstAssistant.slice(0, 500)}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 300,
-      messages: [
-        {
-          role: "user",
-          content: `다음 Q&A의 핵심 검색 키워드를 생성해주세요.
-한국어 키워드 5~8개와 영어 키워드 5~8개를 모두 포함해야 합니다.
-동의어, 관련 개념, 기술 용어도 포함하세요.
-쉼표로만 구분된 키워드 목록만 출력하세요 (설명 없이).
-
-${context}`,
-        },
-      ],
-    });
-
-    const keywords =
-      response.content[0].type === "text" ? response.content[0].text.trim() : "";
-
-    if (keywords) {
-      await prisma.qASet.update({
-        where: { id: qaSetId },
-        data: { searchKeywords: keywords },
-      });
-    }
-  } catch {
-    // 키워드 생성 실패해도 공유는 정상 완료됨
-  }
-}
-
-// OpenAI 임베딩 생성 후 저장
-async function generateAndSaveEmbedding(
-  qaSetId: string,
-  title: string | null,
-  messages: { role: string; content: string }[]
-) {
-  try {
-    if (!process.env.OPENAI_API_KEY) return;
-
-    const text = assembleTextForEmbedding(title, messages);
-    const embedding = await generateEmbedding(text);
-
-    // Save both JSON text and pgvector native column
-    const { saveEmbeddingToDb } = await import("@/lib/search/embedding");
-    await saveEmbeddingToDb(prisma, qaSetId, embedding);
-  } catch {
-    // 임베딩 생성 실패해도 공유는 정상 완료됨
-  }
-}

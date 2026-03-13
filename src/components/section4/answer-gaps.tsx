@@ -84,9 +84,9 @@ export function AnswerGaps({ onAnswerGap }: AnswerGapsProps) {
       <div className="max-w-3xl mx-auto p-6 space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-xl font-bold">AI가 묻고 있는 질문</h1>
+          <h1 className="text-xl font-bold">🤖→👤 AI가 묻고 있는 질문</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            기존 Q&A에서 AI가 발견한 지식 갭입니다. 경험이 있다면 답변해주세요.
+            기존 Q&A에서 AI가 발견한 지식 갭입니다. 인간의 경험과 지식으로 답변해주세요.
           </p>
         </div>
 

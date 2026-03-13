@@ -3,6 +3,7 @@ import GitHub from "next-auth/providers/github";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import { INITIAL_BALANCE } from "@/lib/constants";
+import * as sessionCache from "@/lib/session-cache";
 
 const useGitHub = !!(process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET);
 
@@ -62,21 +63,34 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async session({ session, token }) {
       if (session.user && token.id) {
-        session.user.id = token.id as string;
-        try {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: token.id as string },
-            select: { balance: true, hubScore: true, authorityScore: true, trustLevel: true, onboardingCompleted: true },
-          });
-          if (dbUser) {
-            session.user.balance = dbUser.balance;
-            session.user.hubScore = dbUser.hubScore;
-            session.user.authorityScore = dbUser.authorityScore;
-            session.user.trustLevel = dbUser.trustLevel;
-            session.user.onboardingCompleted = dbUser.onboardingCompleted;
+        const userId = token.id as string;
+        session.user.id = userId;
+
+        // Check cache first
+        const cached = sessionCache.get(userId);
+        if (cached) {
+          session.user.balance = cached.balance;
+          session.user.hubScore = cached.hubScore;
+          session.user.authorityScore = cached.authorityScore;
+          session.user.trustLevel = cached.trustLevel;
+          session.user.onboardingCompleted = cached.onboardingCompleted;
+        } else {
+          try {
+            const dbUser = await prisma.user.findUnique({
+              where: { id: userId },
+              select: { balance: true, hubScore: true, authorityScore: true, trustLevel: true, onboardingCompleted: true },
+            });
+            if (dbUser) {
+              session.user.balance = dbUser.balance;
+              session.user.hubScore = dbUser.hubScore;
+              session.user.authorityScore = dbUser.authorityScore;
+              session.user.trustLevel = dbUser.trustLevel;
+              session.user.onboardingCompleted = dbUser.onboardingCompleted;
+              sessionCache.set(userId, dbUser);
+            }
+          } catch (error) {
+            console.error("Session DB lookup error:", error);
           }
-        } catch (error) {
-          console.error("Session DB lookup error:", error);
         }
       }
       return session;

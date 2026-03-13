@@ -127,6 +127,10 @@ model QASet {
   authorityScore  Float   @default(0.0)  // 콘텐츠 품질 점수
   qualityPool     Int     @default(0)    // 성장 풀 (경작 마일스톤에서 해제)
 
+  // Canonical Q&A status
+  canonicalStatus  String  @default("independent") // "independent" | "canonical" | "subordinate" | "absorbed"
+  canonicalParentId String? // Points to the canonical QASet if subordinate/absorbed
+
   // Optimistic concurrency
   version          Int   @default(0)
 
@@ -460,6 +464,30 @@ model QASetTag {
   tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([qaSetId, tagId])
+}
+
+// ─────────────────────────────────────────────
+// BACKGROUND JOBS
+// ─────────────────────────────────────────────
+
+model BackgroundJob {
+  id           String   @id @default(cuid())
+  contextId    String   // Grouping key (e.g. QASet ID)
+  name         String   // Job name within the context
+  status       String   @default("pending") // "pending" | "running" | "completed" | "failed"
+  payload      String?  // JSON input data
+  dependsOn    String?  // JSON array of job names that must complete first
+  error        String?  // Last error message
+  attempts     Int      @default(0)
+  maxRetries   Int      @default(3)
+  lockedAt     DateTime?
+  completedAt  DateTime?
+  runAfter     DateTime @default(now()) // For delayed/retry scheduling
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status, runAfter])
+  @@index([contextId])
 }
 
 // ─────────────────────────────────────────────

@@ -51,10 +51,38 @@ export function NotificationBell() {
     }
   }, []);
 
+  // Initial fetch + SSE for real-time, fallback to polling
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+
+    // Try SSE connection
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource("/api/notifications/stream");
+      eventSource.addEventListener("notification", (event) => {
+        try {
+          const notification = JSON.parse(event.data) as Notification;
+          setNotifications((prev) => [notification, ...prev].slice(0, 20));
+          setUnreadCount((prev) => prev + 1);
+        } catch {
+          // ignore parse errors
+        }
+      });
+      eventSource.onerror = () => {
+        // SSE failed, will use polling fallback
+        eventSource?.close();
+        eventSource = null;
+      };
+    } catch {
+      // SSE not supported, polling fallback
+    }
+
+    // Polling fallback (longer interval if SSE is connected)
+    const interval = setInterval(fetchNotifications, eventSource ? 120000 : 30000);
+    return () => {
+      clearInterval(interval);
+      eventSource?.close();
+    };
   }, [fetchNotifications]);
 
   const markAsRead = async (ids: string[]) => {

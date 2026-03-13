@@ -157,7 +157,7 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
               <p className="text-[11px] text-muted-foreground mt-1">아래에서 시작하세요</p>
             ) : hasUnshared ? (
               <p className="text-[11px] text-muted-foreground mt-1">
-                공유하면 경작을 받을 수 있어요
+                영토를 공개하면 경작을 받을 수 있어요
 </p>
             ) : (
               <div className="text-xs text-muted-foreground mt-1">{stats.sharedQASets}개 공유됨</div>
@@ -200,7 +200,7 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
             <h3 className="font-medium text-lg">아직 활동이 없습니다</h3>
             <p className="text-sm text-muted-foreground max-w-sm mx-auto">
               AI에게 질문하고, 좋은 대화는 공유하세요.<br />
-              다른 사람이 추천하면 보상이 돌아옵니다.
+              다른 사람이 경작하면 보상이 돌아옵니다.
             </p>
             <div className="flex gap-2 mt-2">
               <Button onClick={onGoToSearch}>
@@ -232,16 +232,16 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-medium truncate">{qa.title || "제목 없음"}</span>
                       {qa.isShared ? (
-                        <Badge variant="secondary" className="shrink-0">공유됨</Badge>
+                        <Badge variant="secondary" className="shrink-0">공개됨</Badge>
                       ) : (
-                        <Badge variant="outline" className="shrink-0 text-muted-foreground">미공유</Badge>
+                        <Badge variant="outline" className="shrink-0 text-muted-foreground">미공개</Badge>
                       )}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span>메시지 {qa._count.messages}개</span>
                       {qa.totalInvested > 0 && <span>🌱 {qa.totalInvested}P ({qa.investorCount}명)</span>}
                       {!qa.isShared && qa._count.messages >= 2 && (
-                        <span className="text-primary font-medium">공유하면 경작을 받을 수 있어요</span>
+                        <span className="text-primary font-medium">영토를 공개하면 경작을 받을 수 있어요</span>
                       )}
                     </div>
                   </div>

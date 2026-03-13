@@ -7,11 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Loader2, TrendingUp, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { QASetCardData, ScoreDetail } from "@/types/qa-set";
 import { KnowledgeBounties } from "@/components/section1/knowledge-bounties";
+import { ActivityFeed } from "@/components/section1/activity-feed";
+import { MiniMap } from "@/components/section1/mini-map";
 
 interface Section1Props {
   onNewQuestion: (question: string) => void;
   onSelectSharedQA: (qaSetId: string) => void;
   onAnswerGap?: (gapId: string, description: string) => void;
+  onNavigateToMap?: () => void;
 }
 
 interface SearchState {
@@ -30,7 +33,7 @@ interface TagItem {
   count: number;
 }
 
-export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswerGap }: Section1Props) {
+export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswerGap, onNavigateToMap }: Section1Props) {
   const [question, setQuestion] = useState("");
   const [trendingQAs, setTrendingQAs] = useState<QASetCardData[]>([]);
   const [allTrendingQAs, setAllTrendingQAs] = useState<QASetCardData[]>([]);
@@ -199,7 +202,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
 
           {/* 관련성 가중치 슬라이더 */}
           <div className="flex items-center gap-3 px-2">
-            <span className="text-[11px] text-muted-foreground whitespace-nowrap">👍 추천순</span>
+            <span className="text-[11px] text-muted-foreground whitespace-nowrap">🌾 경작순</span>
             <input
               type="range"
               min={0}
@@ -207,7 +210,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
               value={relevanceWeight}
               onChange={(e) => setRelevanceWeight(parseInt(e.target.value))}
               className="flex-1 h-1.5 accent-primary cursor-pointer"
-              title={`관련성 ${relevanceWeight}% / 투자 ${100 - relevanceWeight}%`}
+              title={`관련성 ${relevanceWeight}% / 경작 ${100 - relevanceWeight}%`}
             />
             <span className="text-[11px] text-muted-foreground whitespace-nowrap">🎯 관련성순</span>
             <span className="text-[10px] text-muted-foreground/70 tabular-nums w-8 text-right">{relevanceWeight}%</span>
@@ -357,6 +360,8 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
           {/* ── 트렌딩 (검색 전 기본 화면) ── */}
           {showTrending && (
             <div>
+              <ActivityFeed onSelectQASet={onSelectSharedQA} />
+              <MiniMap onNavigateToMap={onNavigateToMap} />
               <KnowledgeBounties onStartQuestion={handleBountyClick} onAnswerGap={onAnswerGap} />
               {/* 태그 필터 pill */}
               {popularTags.length > 0 && (
@@ -470,7 +475,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                 <p className="text-sm text-white/90 leading-snug">
                   아직 아무도 답하지 않은 영역입니다.<br />
                   지금 Q&A를 만들면 <span className="font-semibold underline decoration-dotted">선점 효과</span>로
-                  이후 투자자 보상을 받을 수 있습니다.
+                  이후 경작자 보상을 받을 수 있습니다.
                 </p>
               </div>
             </div>
@@ -529,8 +534,8 @@ function SearchResultItem({
           )}
         </span>
         <span className="text-xs text-muted-foreground ml-auto shrink-0 flex items-center gap-2.5">
-          <span title="추천 포인트">👍 {qa.totalInvested}</span>
-          <span title="추천한 사람">{qa.investorCount}명 추천</span>
+          <span title="경작 포인트">🌾 {qa.totalInvested}</span>
+          <span title="경작한 사람">{qa.investorCount}명 경작</span>
         </span>
       </div>
 
@@ -566,8 +571,8 @@ function SearchResultItem({
               ({score.text > 0 ? `텍스트${score.text}` : ""}{score.text > 0 && score.vector > 0 ? "+" : ""}{score.vector > 0 ? `벡터${score.vector}` : ""})
             </span>
           </span>
-          <span title={`추천 점수 (가중치 ${100 - (relevanceWeight ?? 70)}%)`}>
-            👍 추천 {score.invest}
+          <span title={`경작 점수 (가중치 ${100 - (relevanceWeight ?? 70)}%)`}>
+            🌾 경작 {score.invest}
           </span>
         </div>
       )}

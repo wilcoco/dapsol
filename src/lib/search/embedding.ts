@@ -107,23 +107,87 @@ export async function vectorSearch(
   const { excludeQASetId, limit = 20, minSimilarity = 0.3 } = options;
   const vectorStr = `[${queryEmbedding.join(",")}]`;
 
-  // cosine distance: 1 - similarity, so we order by distance ASC
-  const results: Array<{ id: string; similarity: number }> = await prisma.$queryRaw`
-    SELECT id, 1 - ("embeddingVec" <=> ${vectorStr}::vector) as similarity
-    FROM "QASet"
-    WHERE "isShared" = true
-      AND "embeddingVec" IS NOT NULL
-      ${excludeQASetId ? prisma.$queryRaw`AND "id" != ${excludeQASetId}` : prisma.$queryRaw``}
-    HAVING 1 - ("embeddingVec" <=> ${vectorStr}::vector) > ${minSimilarity}
-    ORDER BY "embeddingVec" <=> ${vectorStr}::vector
-    LIMIT ${limit}
-  `.catch(() => {
-    // Fallback: if pgvector query fails (e.g., extension not installed), return empty
-    console.warn("[pgvector] Vector search failed, falling back to in-memory search");
-    return [];
-  });
+  try {
+    // Use subquery to filter by similarity (can't use column alias in WHERE)
+    let results: Array<{ id: string; similarity: number }>;
 
-  return results;
+    if (excludeQASetId) {
+      results = await prisma.$queryRaw`
+        SELECT id, (1 - ("embeddingVec" <=> ${vectorStr}::vector)) as similarity
+        FROM "QASet"
+        WHERE "isShared" = true
+          AND "embeddingVec" IS NOT NULL
+          AND "id" != ${excludeQASetId}
+          AND (1 - ("embeddingVec" <=> ${vectorStr}::vector)) > ${minSimilarity}
+        ORDER BY "embeddingVec" <=> ${vectorStr}::vector
+        LIMIT ${limit}
+      `;
+    } else {
+      results = await prisma.$queryRaw`
+        SELECT id, (1 - ("embeddingVec" <=> ${vectorStr}::vector)) as similarity
+        FROM "QASet"
+        WHERE "isShared" = true
+          AND "embeddingVec" IS NOT NULL
+          AND (1 - ("embeddingVec" <=> ${vectorStr}::vector)) > ${minSimilarity}
+        ORDER BY "embeddingVec" <=> ${vectorStr}::vector
+        LIMIT ${limit}
+      `;
+    }
+
+    return results;
+  } catch {
+    console.warn("[pgvector] Vector search failed, falling back to empty results");
+    return [];
+  }
+}
+
+/**
+ * Check if pgvector extension and index are properly set up.
+ */
+export async function checkPgvectorStatus(prisma: any): Promise<{
+  extensionInstalled: boolean;
+  columnExists: boolean;
+  indexExists: boolean;
+  vectorCount: number;
+}> {
+  try {
+    // Check extension
+    const extResult = await prisma.$queryRaw`
+      SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector') as installed
+    `;
+    const extensionInstalled = (extResult as any)[0]?.installed ?? false;
+
+    // Check column
+    const colResult = await prisma.$queryRaw`
+      SELECT EXISTS(
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'QASet' AND column_name = 'embeddingVec'
+      ) as exists
+    `;
+    const columnExists = (colResult as any)[0]?.exists ?? false;
+
+    // Check index
+    const idxResult = await prisma.$queryRaw`
+      SELECT EXISTS(
+        SELECT 1 FROM pg_indexes
+        WHERE tablename = 'QASet' AND indexname = 'idx_qaset_embedding'
+      ) as exists
+    `;
+    const indexExists = (idxResult as any)[0]?.exists ?? false;
+
+    // Count vectors
+    let vectorCount = 0;
+    if (columnExists) {
+      const countResult = await prisma.$queryRaw`
+        SELECT COUNT(*)::int as count FROM "QASet" WHERE "embeddingVec" IS NOT NULL
+      `;
+      vectorCount = (countResult as any)[0]?.count ?? 0;
+    }
+
+    return { extensionInstalled, columnExists, indexExists, vectorCount };
+  } catch {
+    return { extensionInstalled: false, columnExists: false, indexExists: false, vectorCount: 0 };
+  }
 }
 
 export { EMBEDDING_MODEL };
