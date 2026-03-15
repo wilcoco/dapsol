@@ -13,13 +13,15 @@ interface FeedItem {
   message: string;
 }
 
-const ACTION_ICON: Record<string, string> = {
-  share: "⛏️",
-  invest: "🌾",
-  hunt: "🏹",
-  milestone: "🏆",
-  burn: "🔥",
+const ACTION_CONFIG: Record<string, { icon: string; gradient: string }> = {
+  share: { icon: "⛏️", gradient: "from-blue-500/20 to-blue-600/10 border-blue-200 dark:border-blue-800" },
+  invest: { icon: "🌾", gradient: "from-green-500/20 to-green-600/10 border-green-200 dark:border-green-800" },
+  hunt: { icon: "🏹", gradient: "from-red-500/20 to-red-600/10 border-red-200 dark:border-red-800" },
+  milestone: { icon: "🏆", gradient: "from-yellow-500/20 to-yellow-600/10 border-yellow-200 dark:border-yellow-800" },
+  burn: { icon: "🔥", gradient: "from-orange-500/20 to-orange-600/10 border-orange-200 dark:border-orange-800" },
 };
+
+const DEFAULT_CONFIG = { icon: "📌", gradient: "from-muted/50 to-muted/30 border-border" };
 
 interface ActivityFeedProps {
   onSelectQASet?: (qaSetId: string) => void;
@@ -43,11 +45,11 @@ export function ActivityFeed({ onSelectQASet }: ActivityFeedProps) {
     return (
       <div className="mb-5">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-sm font-semibold">📡 지금 일어나고 있는 일</span>
+          <span className="text-sm font-semibold">📡 지금 이 순간</span>
         </div>
         <div className="flex gap-2 overflow-hidden">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-10 w-48 rounded-lg bg-muted/50 animate-pulse shrink-0" />
+            <div key={i} className="h-16 w-48 rounded-xl bg-muted/50 animate-pulse shrink-0" />
           ))}
         </div>
       </div>
@@ -67,27 +69,48 @@ export function ActivityFeed({ onSelectQASet }: ActivityFeedProps) {
     return `${days}일 전`;
   };
 
+  // Format progressive text: "N명 경작 중" style
+  const progressiveMessage = (item: FeedItem) => {
+    if (item.action === "invest" && item.amount) {
+      return `${item.userName}님이 ${item.amount}🌾 경작 중`;
+    }
+    if (item.action === "hunt" && item.amount) {
+      return `${item.userName}님이 반박 중 🏹`;
+    }
+    return item.message;
+  };
+
   return (
     <div className="mb-5">
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-sm font-semibold">📡 지금 일어나고 있는 일</span>
-        <span className="text-xs text-muted-foreground">실시간 활동</span>
+        <span className="text-sm font-semibold">📡 지금 이 순간</span>
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+        </span>
+        <span className="text-xs text-muted-foreground">실시간</span>
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {feed.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => item.qaSetId && onSelectQASet?.(item.qaSetId)}
-            disabled={!item.qaSetId}
-            className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg border bg-card hover:bg-accent/50 transition-colors text-left max-w-[280px] disabled:opacity-70 disabled:cursor-default"
-          >
-            <span className="text-base shrink-0">{ACTION_ICON[item.action] ?? "📌"}</span>
-            <div className="min-w-0">
-              <p className="text-xs truncate">{item.message}</p>
-              <p className="text-[10px] text-muted-foreground">{timeAgo(item.createdAt)}</p>
-            </div>
-          </button>
-        ))}
+      <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide">
+        {feed.map((item) => {
+          const config = ACTION_CONFIG[item.action] ?? DEFAULT_CONFIG;
+          return (
+            <button
+              key={item.id}
+              onClick={() => item.qaSetId && onSelectQASet?.(item.qaSetId)}
+              disabled={!item.qaSetId}
+              className={`shrink-0 flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl border bg-gradient-to-br ${config.gradient} hover:shadow-md transition-all text-left max-w-[260px] disabled:opacity-70 disabled:cursor-default`}
+            >
+              <span className="text-xl shrink-0 mt-0.5">{config.icon}</span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium truncate leading-snug">{progressiveMessage(item)}</p>
+                {item.qaSetTitle && (
+                  <p className="text-[10px] text-muted-foreground truncate mt-0.5">"{item.qaSetTitle}"</p>
+                )}
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5">{timeAgo(item.createdAt)}</p>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -111,44 +111,58 @@ export default function HomePage() {
     );
   }
 
-  // Not logged in — landing
+  // Not logged in — landing (Julie Zhuo: 3 equal CTAs + live feed)
   if (!session) {
     return (
       <div className="min-h-screen">
         <Header />
-        <main className="flex flex-col items-center justify-center min-h-[calc(100vh-3.5rem)] gap-6 p-4 overflow-y-auto">
-          <div className="text-center space-y-4 max-w-2xl">
+        <main className="flex flex-col items-center min-h-[calc(100vh-3.5rem)] p-4 overflow-y-auto">
+          {/* Hero */}
+          <div className="text-center space-y-4 max-w-2xl pt-12 pb-6">
             <h1 className="text-4xl font-bold tracking-tight">
               🌍 집단지성
             </h1>
             <p className="text-xl text-foreground font-medium">
               혼자 쓰고 버리던 AI 답변,<br className="sm:hidden" /> 여기선 모두의 지식이 됩니다
             </p>
-            <p className="text-base text-muted-foreground">
-              새 영토를 개척하고, 좋은 지식을 경작하세요. 일찍 발굴할수록 보상이 커집니다.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
-              <Button size="lg" asChild>
-                <Link href="/login">탐험 시작하기</Link>
-              </Button>
-            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mt-8">
-            <div className="p-5 rounded-xl border bg-card text-center space-y-2">
-              <div className="text-3xl">⛏️</div>
-              <h3 className="font-semibold">개척하기</h3>
-              <p className="text-sm text-muted-foreground">AI에게 질문하고<br />새로운 지식의 영토를 개척하세요</p>
-            </div>
-            <div className="p-5 rounded-xl border bg-card text-center space-y-2">
-              <div className="text-3xl">🌾</div>
-              <h3 className="font-semibold">경작하기</h3>
-              <p className="text-sm text-muted-foreground">좋은 Q&A를 발견하면 경작하세요<br />일찍 경작할수록 보상이 커집니다</p>
-            </div>
-            <div className="p-5 rounded-xl border bg-card text-center space-y-2">
-              <div className="text-3xl">🗺️</div>
-              <h3 className="font-semibold">탐험하기</h3>
-              <p className="text-sm text-muted-foreground">지식이 모여 마을이 되고<br />마을이 모여 문명이 됩니다</p>
-            </div>
+
+          {/* 3 Equal Action Cards (Julie Zhuo principle) */}
+          <div className="grid grid-cols-3 gap-3 max-w-lg w-full mb-8">
+            <Link
+              href="/login"
+              className="p-4 rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 text-center space-y-2 hover:shadow-lg hover:scale-105 transition-all"
+            >
+              <div className="text-2xl">⛏️</div>
+              <h3 className="font-semibold text-sm">개척하기</h3>
+              <p className="text-[10px] text-muted-foreground leading-snug">AI에게<br />질문하세요</p>
+            </Link>
+            <Link
+              href="/login"
+              className="p-4 rounded-xl border-2 border-green-200 dark:border-green-800 bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 text-center space-y-2 hover:shadow-lg hover:scale-105 transition-all"
+            >
+              <div className="text-2xl">🌾</div>
+              <h3 className="font-semibold text-sm">경작하기</h3>
+              <p className="text-[10px] text-muted-foreground leading-snug">좋은 Q&A를<br />키우세요</p>
+            </Link>
+            <Link
+              href="/login"
+              className="p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20 text-center space-y-2 hover:shadow-lg hover:scale-105 transition-all"
+            >
+              <div className="text-2xl">🤖→👤</div>
+              <h3 className="font-semibold text-sm">답변하기</h3>
+              <p className="text-[10px] text-muted-foreground leading-snug">AI의 질문에<br />답하세요</p>
+            </Link>
+          </div>
+
+          <Button size="lg" asChild className="mb-8">
+            <Link href="/login">탐험 시작하기</Link>
+          </Button>
+
+          {/* Live feed preview (visible without login) */}
+          <div className="w-full max-w-3xl">
+            <LandingActivityFeed />
+            <LandingTrending />
           </div>
         </main>
       </div>
@@ -265,6 +279,86 @@ export default function HomePage() {
             </button>
           ))}
         </nav>
+      </div>
+    </div>
+  );
+}
+
+// ── Landing page components (non-logged-in) ──
+
+function LandingActivityFeed() {
+  const [feed, setFeed] = useState<any[]>([]);
+  useEffect(() => {
+    fetch("/api/activity-feed?limit=5")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.feed) setFeed(d.feed); })
+      .catch(() => {});
+  }, []);
+
+  if (feed.length === 0) return null;
+
+  const timeAgo = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "방금";
+    if (mins < 60) return `${mins}분 전`;
+    return `${Math.floor(mins / 60)}시간 전`;
+  };
+
+  const icons: Record<string, string> = { share: "⛏️", invest: "🌾", hunt: "🏹", milestone: "🏆" };
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-sm font-semibold">📡 지금 이 순간</span>
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+        </span>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {feed.map((item: any) => (
+          <div key={item.id} className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg border bg-card text-left max-w-[260px]">
+            <span className="text-base">{icons[item.action] ?? "📌"}</span>
+            <div className="min-w-0">
+              <p className="text-xs truncate">{item.message}</p>
+              <p className="text-[10px] text-muted-foreground">{timeAgo(item.createdAt)}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LandingTrending() {
+  const [qas, setQas] = useState<any[]>([]);
+  useEffect(() => {
+    fetch("/api/qa-sets?shared=true&sort=trending&limit=5")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.qaSets) setQas(d.qaSets); })
+      .catch(() => {});
+  }, []);
+
+  if (qas.length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-sm font-semibold">🔥 지금 뜨거운 영토</span>
+        <span className="text-xs text-muted-foreground">읽기만 가능 · 경작은 로그인 후</span>
+      </div>
+      <div className="divide-y divide-border/50">
+        {qas.map((qa: any) => (
+          <div key={qa.id} className="py-3">
+            <p className="text-sm font-medium">{qa.title ?? "제목 없음"}</p>
+            <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
+              <span>{qa.creator?.name ?? "익명"}</span>
+              <span>🌾 {qa.totalInvested ?? 0}</span>
+              <span>{qa.investorCount ?? 0}명 경작 중</span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

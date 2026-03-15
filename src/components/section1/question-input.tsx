@@ -9,6 +9,7 @@ import { Search, Loader2, TrendingUp, ExternalLink, ChevronLeft, ChevronRight, P
 import { QASetCardData, ScoreDetail } from "@/types/qa-set";
 import { ActivityFeed } from "@/components/section1/activity-feed";
 import { MiniMap } from "@/components/section1/mini-map";
+import { MyStatus } from "@/components/section1/my-status";
 
 interface Section1Props {
   onNewQuestion: (question: string) => void;
@@ -417,13 +418,16 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                         className="group flex items-center gap-3 py-2.5 px-3 -mx-3 rounded-lg cursor-pointer hover:bg-green-50/50 dark:hover:bg-green-950/20 transition-colors"
                         onClick={() => onSelectSharedQA(qa.id)}
                       >
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 font-medium shrink-0">NEW</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 font-medium shrink-0">🆕</span>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
                             {qa.title ?? "제목 없음"}
                           </p>
                           <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
                             <span>{qa.creator?.name ?? "익명"}</span>
+                            {qa.investorCount === 0 && (
+                              <span className="text-amber-600 dark:text-amber-400 font-medium">선점 보상 3배</span>
+                            )}
                             {qa.tags && qa.tags.length > 0 && (
                               <span>· {qa.tags[0].tag.name}</span>
                             )}
@@ -444,6 +448,9 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                   </div>
                 </div>
               )}
+
+              {/* ── E. 개인 상태 — "👤 나의 문명" (Yu-kai Chou Drive 1+5) ── */}
+              <MyStatus />
 
               {/* ── 🔥 트렌딩 Q&A (인라인 경작 + 활발 표시) ── */}
               {trendingQAs.length > 0 ? (
@@ -647,7 +654,7 @@ function SearchResultItem({
             </span>
           )}
           <span title="경작 포인트">🌾 {totalInv}</span>
-          <span title="경작한 사람">{investorCount}명</span>
+          <span title="경작한 사람">{investorCount}명 경작 중</span>
         </span>
       </div>
 
