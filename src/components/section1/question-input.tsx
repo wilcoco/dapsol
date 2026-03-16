@@ -214,41 +214,30 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
   return (
     <div className="flex flex-col h-full overflow-hidden relative pb-14 md:pb-0">
 
-      {/* ── Header: Search bar ── */}
-      <div className={`shrink-0 border-b bg-muted/20 transition-all duration-300 ${search ? "px-6 py-4" : "px-6 py-6"}`}>
-        <div className="max-w-2xl mx-auto space-y-3">
+      {/* ── Header: Search bar (검색 우선 — Enter로 바로 검색) ── */}
+      <div className={`shrink-0 border-b bg-muted/20 transition-all duration-300 ${search ? "px-6 py-3" : "px-6 py-6"}`}>
+        <div className="max-w-2xl mx-auto">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none z-10" />
             <Input
               ref={inputRef}
-              placeholder="궁금한 것을 입력하세요..."
+              placeholder="궁금한 것을 검색하세요..."
               value={question}
               onChange={(e) => {
                 setQuestion(e.target.value);
                 if (search && e.target.value.trim() !== search.query) setSearch(null);
               }}
               onKeyDown={handleKeyDown}
-              className="text-lg h-14 pl-12 pr-4 rounded-2xl shadow-sm border-2 focus-visible:ring-0 focus-visible:border-primary"
+              className="text-lg h-14 pl-12 pr-28 rounded-2xl shadow-sm border-2 focus-visible:ring-0 focus-visible:border-primary"
               disabled={isSubmitting}
             />
-          </div>
-          <div className="flex gap-2.5">
             <Button
               onClick={() => handleSearch(1)}
               disabled={!question.trim() || isSearching}
-              variant="outline"
-              className="flex-1 h-12 rounded-xl gap-2 text-sm font-medium"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-10 rounded-xl gap-1.5 text-sm px-4"
             >
-              {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>🔍</span>}
-              지식 검색
-            </Button>
-            <Button
-              onClick={handleAskAI}
-              disabled={!question.trim() || isSubmitting}
-              className="flex-1 h-12 rounded-xl gap-2 text-sm font-medium"
-            >
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "✨"}
-              AI에게 묻기
+              {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              검색
             </Button>
           </div>
         </div>
@@ -305,14 +294,38 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                   {search.totalPages > 1 && (
                     <Pagination search={search} onPage={handlePage} />
                   )}
+
+                  {/* 검색 결과 하단: AI에게 묻기 유도 */}
+                  <div className="mt-6 pt-4 border-t text-center space-y-2">
+                    <p className="text-sm text-muted-foreground">원하는 답변이 없나요?</p>
+                    <Button
+                      onClick={handleAskAI}
+                      disabled={isSubmitting}
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "✨"}
+                      &ldquo;{search.query}&rdquo; AI에게 직접 묻기
+                    </Button>
+                  </div>
                 </>
               ) : (
-                <div className="text-center py-12 space-y-3">
-                  <div className="text-5xl">🗺️</div>
-                  <p className="font-semibold text-lg">&ldquo;{search.query}&rdquo; — 아직 아무도 없습니다</p>
-                  <p className="text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                    이 주제의 첫 번째 Q&A를 만들어보세요.<br />
-                    지금 AI에게 물어 Q&A를 만들면 초기 투자 효과를 누릴 수 있습니다.
+                /* 검색 결과 0건: AI 묻기 강조 */
+                <div className="text-center py-10 space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    &ldquo;{search.query}&rdquo;에 대한 기존 Q&A가 없습니다
+                  </p>
+                  <Button
+                    onClick={handleAskAI}
+                    disabled={isSubmitting}
+                    size="lg"
+                    className="gap-2 text-base"
+                  >
+                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "✨"}
+                    AI에게 직접 묻기
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    첫 번째 Q&A를 만들면 이후 투자자의 보상을 받을 수 있습니다
                   </p>
                 </div>
               )}
