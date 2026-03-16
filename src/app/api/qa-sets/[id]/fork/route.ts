@@ -31,6 +31,7 @@ export async function POST(
       summary: original.summary,
       creatorId: session.user.id,
       parentQASetId: id,
+      parentMessageCount: original.messages.length,
       isShared: false,
       messages: {
         create: original.messages.map((msg) => ({

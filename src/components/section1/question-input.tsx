@@ -208,7 +208,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
   const hasRecentActivity = (qa: QASetCardData) => {
     const diff = Date.now() - new Date(qa.createdAt).getTime();
     const isRecent = diff < 24 * 60 * 60 * 1000; // 24시간 이내
-    return isRecent && qa.investorCount >= 3; // 최근 + 경작자 3명 이상
+    return isRecent && qa.investorCount >= 3; // 최근 + 투자자 3명 이상
   };
 
   return (
@@ -312,7 +312,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                   <p className="font-semibold text-lg">&ldquo;{search.query}&rdquo; — 아직 아무도 없습니다</p>
                   <p className="text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
                     이 주제의 첫 번째 Q&A를 만들어보세요.<br />
-                    지금 AI에게 물어 Q&A를 만들면 선점 효과를 누릴 수 있습니다.
+                    지금 AI에게 물어 Q&A를 만들면 초기 투자 효과를 누릴 수 있습니다.
                   </p>
                 </div>
               )}
@@ -409,7 +409,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-base">🌱</span>
                     <h3 className="text-sm font-semibold">새로 공유된 Q&A</h3>
-                    <span className="text-[10px] text-muted-foreground">48시간 이내 · 첫 경작자가 되어보세요</span>
+                    <span className="text-[10px] text-muted-foreground">48시간 이내 · 첫 투자자가 되어보세요</span>
                   </div>
                   <div className="space-y-1">
                     {seedlingQAs.map((qa) => (
@@ -426,7 +426,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                           <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
                             <span>{qa.creator?.name ?? "익명"}</span>
                             {qa.investorCount === 0 && (
-                              <span className="text-amber-600 dark:text-amber-400 font-medium">선점 보상 3배</span>
+                              <span className="text-amber-600 dark:text-amber-400 font-medium">초기 투자 보상 3배</span>
                             )}
                             {qa.tags && qa.tags.length > 0 && (
                               <span>· {qa.tags[0].tag.name}</span>
@@ -438,9 +438,9 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                             onClick={(e) => handleQuickCultivate(e, qa.id)}
                             disabled={cultivatingId === qa.id}
                             className="shrink-0 text-xs px-2.5 py-1 rounded-full border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/50 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
-                            title="첫 경작자 되기"
+                            title="첫 투자자 되기"
                           >
-                            {cultivatingId === qa.id ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "🌾 첫 경작"}
+                            {cultivatingId === qa.id ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "📈 첫 투자"}
                           </button>
                         )}
                       </div>
@@ -449,10 +449,10 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                 </div>
               )}
 
-              {/* ── E. 개인 상태 — "👤 나의 문명" (Yu-kai Chou Drive 1+5) ── */}
+              {/* ── E. 개인 상태 — "👤 나의 현황" (Yu-kai Chou Drive 1+5) ── */}
               <MyStatus />
 
-              {/* ── 🔥 트렌딩 Q&A (인라인 경작 + 활발 표시) ── */}
+              {/* ── 🔥 트렌딩 Q&A (인라인 투자 + 활발 표시) ── */}
               {trendingQAs.length > 0 ? (
                 <>
                   <div className="flex items-center gap-2 mb-4">
@@ -544,11 +544,11 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
             <div className="flex items-start gap-3">
               <span className="text-3xl shrink-0">🚀</span>
               <div className="space-y-0.5">
-                <p className="font-bold text-base leading-tight">신 개척지 발견!</p>
+                <p className="font-bold text-base leading-tight">새로운 주제 발견!</p>
                 <p className="text-sm text-white/90 leading-snug">
                   아직 아무도 답하지 않은 영역입니다.<br />
-                  지금 Q&A를 만들면 <span className="font-semibold underline decoration-dotted">선점 효과</span>로
-                  이후 경작자 보상을 받을 수 있습니다.
+                  지금 Q&A를 만들면 <span className="font-semibold underline decoration-dotted">초기 투자 효과</span>로
+                  이후 투자자 보상을 받을 수 있습니다.
                 </p>
               </div>
             </div>
@@ -604,7 +604,7 @@ function Pagination({ search, onPage }: { search: SearchState; onPage: (p: numbe
   );
 }
 
-// ── Q&A List Item (인라인 경작 + 활발 표시 + 신뢰도) ──
+// ── Q&A List Item (인라인 투자 + 활발 표시 + 신뢰도) ──
 function SearchResultItem({
   qa,
   index,
@@ -650,11 +650,11 @@ function SearchResultItem({
         <span className="text-xs text-muted-foreground ml-auto shrink-0 flex items-center gap-2">
           {showActivityBadge && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-600 dark:text-orange-400 font-medium animate-pulse">
-              경작 활발
+              활발
             </span>
           )}
-          <span title="경작 포인트">🌾 {totalInv}</span>
-          <span title="경작한 사람">{investorCount}명 경작 중</span>
+          <span title="투자 포인트">📈 {totalInv}</span>
+          <span title="투자한 사람">{investorCount}명 투자 중</span>
         </span>
       </div>
 
@@ -703,9 +703,9 @@ function SearchResultItem({
             onClick={(e) => onCultivate(e, qa.id)}
             disabled={isCultivating}
             className="shrink-0 text-xs px-3 py-1.5 rounded-full border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors disabled:opacity-50"
-            title="10포인트 경작하기"
+            title="10포인트 투자하기"
           >
-            {isCultivating ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "🌾 경작"}
+            {isCultivating ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "📈 투자"}
           </button>
         )}
       </div>

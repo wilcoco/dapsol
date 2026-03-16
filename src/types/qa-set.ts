@@ -6,7 +6,7 @@ export interface InvestmentData {
   isActive: boolean;
   isNegative: boolean;
   cumulativeReward: number;
-  // Hunting (사냥) metadata
+  // Hunting (반대 투자) metadata
   huntingReason: string | null;
   huntingEvidence: string | null;
   huntingTargetMessageId: string | null;

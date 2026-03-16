@@ -1,7 +1,7 @@
 /**
  * Investment Service
  *
- * 투자(경작/사냥)의 모든 비즈니스 로직을 담당.
+ * 투자(투자/반대 투자)의 모든 비즈니스 로직을 담당.
  * 라우트 핸들러에서 HTTP 관심사만 남기고 비즈니스 로직은 여기서 처리.
  */
 
@@ -166,11 +166,11 @@ export async function validateInvestment(
   qaSet: LoadedQASet,
 ): Promise<void> {
   if (!input.amount || input.amount <= 0) {
-    throw new InvestmentValidationError("경작 포인트를 입력해주세요.", "INVALID_AMOUNT", 400);
+    throw new InvestmentValidationError("투자 포인트를 입력해주세요.", "INVALID_AMOUNT", 400);
   }
 
   if (!qaSet.isShared) {
-    throw new InvestmentValidationError("공유되지 않은 Q&A에는 경작할 수 없습니다.", "NOT_SHARED", 400);
+    throw new InvestmentValidationError("공유되지 않은 Q&A에는 투자할 수 없습니다.", "NOT_SHARED", 400);
   }
 
   if (user.balance < input.amount) {
@@ -181,7 +181,7 @@ export async function validateInvestment(
   const maxByLevel = getMaxInvestmentByLevel(user.trustLevel);
   if (input.amount > maxByLevel) {
     throw new InvestmentValidationError(
-      `현재 신뢰 레벨(Lv.${user.trustLevel})에서는 1회 최대 ${maxByLevel} 🌱까지 경작할 수 있습니다.`,
+      `현재 신뢰 레벨(Lv.${user.trustLevel})에서는 1회 최대 ${maxByLevel} 💰까지 투자할 수 있습니다.`,
       "TRUST_LEVEL_LIMIT",
       400,
       { maxInvestment: maxByLevel, trustLevel: user.trustLevel },
@@ -214,25 +214,25 @@ export async function validateInvestment(
 
 function validateNegativeInvestment(input: InvestmentInput, user: LoadedUser, qaSet: LoadedQASet): void {
   if (!input.huntingReason) {
-    throw new InvestmentValidationError("사냥 사유를 선택해주세요.", "HUNTING_REASON_REQUIRED", 400);
+    throw new InvestmentValidationError("반대 사유를 선택해주세요.", "HUNTING_REASON_REQUIRED", 400);
   }
   if (user.trustLevel < MIN_TRUST_LEVEL_FOR_NEGATIVE) {
     throw new InvestmentValidationError(
-      `사냥은 신뢰 레벨 Lv.${MIN_TRUST_LEVEL_FOR_NEGATIVE} 이상부터 가능합니다. (현재: Lv.${user.trustLevel})`,
+      `반대 투자는 신뢰 레벨 Lv.${MIN_TRUST_LEVEL_FOR_NEGATIVE} 이상부터 가능합니다. (현재: Lv.${user.trustLevel})`,
       "NEGATIVE_TRUST_LEVEL", 403,
     );
   }
   if (qaSet.investments.some((inv) => inv.userId === input.userId && !inv.isNegative)) {
-    throw new InvestmentValidationError("이미 경작 중인 Q&A는 사냥할 수 없습니다.", "ALREADY_POSITIVE_INVESTED", 400);
+    throw new InvestmentValidationError("이미 투자 중인 Q&A는 반대 투자할 수 없습니다.", "ALREADY_POSITIVE_INVESTED", 400);
   }
   if (input.userId === qaSet.creatorId) {
-    throw new InvestmentValidationError("본인이 만든 Q&A는 사냥할 수 없습니다.", "SELF_NEGATIVE", 403);
+    throw new InvestmentValidationError("본인이 만든 Q&A는 반대 투자할 수 없습니다.", "SELF_NEGATIVE", 403);
   }
 }
 
 function validatePositiveInvestment(input: InvestmentInput, _user: LoadedUser, qaSet: LoadedQASet): void {
   if (qaSet.investments.some((inv) => inv.userId === input.userId && inv.isNegative)) {
-    throw new InvestmentValidationError("이미 사냥 중인 Q&A는 경작할 수 없습니다.", "ALREADY_NEGATIVE_INVESTED", 400);
+    throw new InvestmentValidationError("이미 반대 투자 중인 Q&A는 투자할 수 없습니다.", "ALREADY_NEGATIVE_INVESTED", 400);
   }
 }
 
@@ -602,7 +602,7 @@ async function handlePositiveMilestone(
   for (const inv of poolRelease.stakeholderRewards) {
     createNotification({
       userId: inv.recipientId, type: "quality_pool_release",
-      title: "성장 풀 수확!", body: `${poolRelease.milestone}번째 경작자 마일스톤! +${inv.amount}🌱 보상`,
+      title: "성장 풀 수익!", body: `${poolRelease.milestone}번째 투자자 마일스톤! +${inv.amount}💰 보상`,
       link: `/?qaSetId=${qaSetId}`, qaSetId,
     }).catch(console.error);
   }
@@ -668,7 +668,7 @@ async function handleNegativeMilestone(
   for (const inv of investorRewards) {
     createNotification({
       userId: inv.recipientId, type: "quality_pool_release",
-      title: "사냥 풀 해제!", body: `${negativePosition}번째 사냥꾼 마일스톤! +${inv.amount}🏹 보상`,
+      title: "반대 풀 해제!", body: `${negativePosition}번째 반대 투자자 마일스톤! +${inv.amount}📉 보상`,
       link: `/?qaSetId=${qaSetId}`, qaSetId,
     }).catch(console.error);
   }
@@ -776,7 +776,7 @@ function sendPositiveNotifications(
   if (input.userId !== qaSet.creatorId) {
     notifs.push(createNotification({
       userId: qaSet.creatorId, type: "investment_received",
-      title: "새로운 경작!", body: `${investorName}님이 ${input.amount}🌱 경작했습니다`,
+      title: "새로운 투자!", body: `${investorName}님이 ${input.amount}💰 투자했습니다`,
       link: `/?qaSetId=${input.qaSetId}`, qaSetId: input.qaSetId, investmentId,
     }));
   }
@@ -785,7 +785,7 @@ function sendPositiveNotifications(
     if (reward.recipientId !== input.userId) {
       notifs.push(createNotification({
         userId: reward.recipientId, type: "reward_earned",
-        title: "경작 보상!", body: `+${reward.amount}🌱 보상을 받았습니다`,
+        title: "투자 보상!", body: `+${reward.amount}💰 보상을 받았습니다`,
         link: `/?qaSetId=${input.qaSetId}`, qaSetId: input.qaSetId,
       }));
     }
@@ -803,7 +803,7 @@ function sendNegativeNotifications(
 
   notifs.push(createNotification({
     userId: qaSet.creatorId, type: "hunt_received",
-    title: "사냥 알림!", body: `${investorName}님이 ${input.amount}🏹 사냥했습니다`,
+    title: "반대 투자 알림!", body: `${investorName}님이 ${input.amount}📉 반대 투자했습니다`,
     link: `/?qaSetId=${input.qaSetId}`, qaSetId: input.qaSetId, investmentId,
   }));
 
@@ -811,7 +811,7 @@ function sendNegativeNotifications(
     if (reward.recipientId !== input.userId) {
       notifs.push(createNotification({
         userId: reward.recipientId, type: "reward_earned",
-        title: "사냥 보상!", body: `+${reward.amount}🏹 보상을 받았습니다`,
+        title: "반대 투자 보상!", body: `+${reward.amount}📉 보상을 받았습니다`,
         link: `/?qaSetId=${input.qaSetId}`, qaSetId: input.qaSetId,
       }));
     }

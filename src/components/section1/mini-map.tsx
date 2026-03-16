@@ -71,7 +71,7 @@ export function MiniMap({ onNavigateToMap }: MiniMapProps) {
     return (
       <div className="mb-5">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-sm font-semibold">🗺️ 지식 영토</span>
+          <span className="text-sm font-semibold">🗺️ 주제 클러스터</span>
         </div>
         <div className="h-[140px] rounded-xl bg-muted/30 animate-pulse" />
       </div>
@@ -86,8 +86,8 @@ export function MiniMap({ onNavigateToMap }: MiniMapProps) {
     <div className="mb-5">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">🗺️ 지식 영토</span>
-          <span className="text-xs text-muted-foreground">{clusters.length}개 마을 · {totalQA}개 지식</span>
+          <span className="text-sm font-semibold">🗺️ 주제 클러스터</span>
+          <span className="text-xs text-muted-foreground">{clusters.length}개 클러스터 · {totalQA}개 지식</span>
         </div>
         {onNavigateToMap && (
           <button

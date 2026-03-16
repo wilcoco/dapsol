@@ -14,9 +14,9 @@ interface FeedItem {
 }
 
 const ACTION_CONFIG: Record<string, { icon: string; gradient: string }> = {
-  share: { icon: "⛏️", gradient: "from-blue-500/20 to-blue-600/10 border-blue-200 dark:border-blue-800" },
-  invest: { icon: "🌾", gradient: "from-green-500/20 to-green-600/10 border-green-200 dark:border-green-800" },
-  hunt: { icon: "🏹", gradient: "from-red-500/20 to-red-600/10 border-red-200 dark:border-red-800" },
+  share: { icon: "📝", gradient: "from-blue-500/20 to-blue-600/10 border-blue-200 dark:border-blue-800" },
+  invest: { icon: "📈", gradient: "from-green-500/20 to-green-600/10 border-green-200 dark:border-green-800" },
+  hunt: { icon: "📉", gradient: "from-red-500/20 to-red-600/10 border-red-200 dark:border-red-800" },
   milestone: { icon: "🏆", gradient: "from-yellow-500/20 to-yellow-600/10 border-yellow-200 dark:border-yellow-800" },
   burn: { icon: "🔥", gradient: "from-orange-500/20 to-orange-600/10 border-orange-200 dark:border-orange-800" },
 };
@@ -69,13 +69,13 @@ export function ActivityFeed({ onSelectQASet }: ActivityFeedProps) {
     return `${days}일 전`;
   };
 
-  // Format progressive text: "N명 경작 중" style
+  // Format progressive text: "N명 투자 중" style
   const progressiveMessage = (item: FeedItem) => {
     if (item.action === "invest" && item.amount) {
-      return `${item.userName}님이 ${item.amount}🌾 경작 중`;
+      return `${item.userName}님이 ${item.amount}📈 투자 중`;
     }
     if (item.action === "hunt" && item.amount) {
-      return `${item.userName}님이 반박 중 🏹`;
+      return `${item.userName}님이 반대 투자 중 📉`;
     }
     return item.message;
   };

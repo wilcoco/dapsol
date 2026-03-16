@@ -10,7 +10,7 @@ export const ChatSchema = z.object({
   systemPrompt: z.string().max(10000).optional(),
 });
 
-// Investment (경작/사냥)
+// Investment (투자/반대 투자)
 export const InvestSchema = z.object({
   amount: z.number().int().positive().max(1000),
   isNegative: z.boolean().optional().default(false),

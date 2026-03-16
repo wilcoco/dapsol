@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { expandQuery } from "@/lib/search/query-expander";
-import { generateEmbedding, cosineSimilarity } from "@/lib/search/embedding";
-import { calculateHybridScore, countTextMatches } from "@/lib/search/scoring";
+import {
+  generateEmbedding,
+  vectorSearch,
+  tsvectorSearch,
+} from "@/lib/search/embedding";
 
 // Prisma include 공통 정의
 const qaSetInclude = {
@@ -40,159 +43,103 @@ export async function GET(req: NextRequest) {
 
   const q = query.trim();
 
-  // ── 1. 기본 토큰 준비 ──
-  const baseTokens = q.split(/\s+/).filter((t) => t.length >= 2);
-  const baseSearchTerms = Array.from(new Set([q, ...baseTokens]));
-
-  const baseTermConditions = baseSearchTerms.flatMap((term) => [
-    { title: { contains: term } },
-    { summary: { contains: term } },
-    { searchKeywords: { contains: term } },
-    { messages: { some: { content: { contains: term } } } },
+  // ── 1. Generate query embedding + run parallel searches ──
+  // We need the embedding first for vectorSearch, but we can start tsvector and expansion in parallel
+  const [queryEmbedding, tsvectorResults, expansionResult] = await Promise.all([
+    generateEmbeddingSafe(q),
+    tsvectorSearch(q, 200),
+    expandQuery(q),
   ]);
-
-  // ── 2. 기본 텍스트 검색 + AI 확장 + 벡터 준비 모두 동시 시작 ──
-  const [baseTextResults, expansionResult, vectorCandidates, queryEmbedding] =
-    await Promise.all([
-      // 2a. 기본 토큰으로 텍스트 검색 (즉시 시작 — AI 안 기다림)
-      prisma.qASet.findMany({
-        where: { isShared: true, OR: baseTermConditions },
-        take: 100,
-        include: qaSetInclude,
-      }),
-
-      // 2b. AI 쿼리 확장 (1~3초 걸림, 병렬)
-      expandQuery(q),
-
-      // 2c. 임베딩 있는 QASet 조회 (벡터 검색용)
-      prisma.qASet.findMany({
-        where: { isShared: true, embedding: { not: null } },
-        select: {
-          id: true,
-          embedding: true,
-          title: true,
-          summary: true,
-          searchKeywords: true,
-          totalInvested: true,
-        },
-      }),
-
-      // 2d. 쿼리 임베딩 생성
-      generateEmbeddingSafe(q),
-    ]);
 
   const { expandedTerms } = expansionResult;
 
-  // ── 3. 확장 토큰으로 추가 텍스트 검색 (확장어가 있을 때만) ──
-  const baseResultIds = new Set(baseTextResults.map((r) => r.id));
-  let expandedTextResults: typeof baseTextResults = [];
-
-  if (expandedTerms.length > 0) {
-    const expandedConditions = expandedTerms.flatMap((term) => [
-      { title: { contains: term } },
-      { summary: { contains: term } },
-      { searchKeywords: { contains: term } },
-      { messages: { some: { content: { contains: term } } } },
-    ]);
-
-    expandedTextResults = await prisma.qASet.findMany({
-      where: {
-        isShared: true,
-        id: { notIn: [...baseResultIds] }, // 중복 제거
-        OR: expandedConditions,
-      },
-      take: 50,
-      include: qaSetInclude,
+  // ── 2. Run vector search (needs embedding from step 1) ──
+  let vectorResults: Array<{ id: string; similarity: number }> = [];
+  if (queryEmbedding) {
+    vectorResults = await vectorSearch(prisma, queryEmbedding, {
+      limit: 50,
+      minSimilarity: 0.3,
     });
   }
 
-  // ── 4. 벡터 유사도 계산 ──
-  const vectorScoreMap = new Map<string, number>();
-
-  if (queryEmbedding && vectorCandidates.length > 0) {
-    for (const candidate of vectorCandidates) {
-      if (!candidate.embedding) continue;
-      try {
-        const embeddingVec = JSON.parse(candidate.embedding) as number[];
-        const similarity = cosineSimilarity(queryEmbedding, embeddingVec);
-        if (similarity > 0.1) {
-          vectorScoreMap.set(candidate.id, similarity);
-        }
-      } catch {
-        // 파싱 실패 무시
-      }
-    }
+  // ── 3. Merge + deduplicate candidate IDs ──
+  const tsvectorScoreMap = new Map<string, number>();
+  for (const r of tsvectorResults) {
+    tsvectorScoreMap.set(r.id, r.rank);
   }
 
-  // ── 5. 후보 통합 (기본 텍스트 + 확장 텍스트 + 벡터 only) ──
-  const allTextIds = new Set([
-    ...baseTextResults.map((r) => r.id),
-    ...expandedTextResults.map((r) => r.id),
+  const vectorScoreMap = new Map<string, number>();
+  for (const r of vectorResults) {
+    vectorScoreMap.set(r.id, r.similarity);
+  }
+
+  const allCandidateIds = new Set<string>([
+    ...tsvectorScoreMap.keys(),
+    ...vectorScoreMap.keys(),
   ]);
 
-  const vectorOnlyIds = [...vectorScoreMap.entries()]
-    .filter(([id]) => !allTextIds.has(id))
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
-    .map(([id]) => id);
-
-  let vectorOnlyResults: typeof baseTextResults = [];
-  if (vectorOnlyIds.length > 0) {
-    vectorOnlyResults = await prisma.qASet.findMany({
-      where: { id: { in: vectorOnlyIds } },
-      include: qaSetInclude,
-    });
+  if (allCandidateIds.size === 0) {
+    // ── Fallback: if both tsvector and pgvector returned nothing, try basic text search ──
+    return await fallbackTextSearch(q, expandedTerms, page, limit, relevanceWeight, queryEmbedding);
   }
 
-  const allResults = [
-    ...baseTextResults,
-    ...expandedTextResults,
-    ...vectorOnlyResults,
-  ];
+  // ── 4. Fetch full QASet objects for all candidates (single query) ──
+  const candidateIdArray = [...allCandidateIds];
+  const candidates = await prisma.qASet.findMany({
+    where: { id: { in: candidateIdArray } },
+    include: qaSetInclude,
+  });
 
-  // ── 6. 하이브리드 스코어링 ──
-  const allSearchTerms = Array.from(
-    new Set([...baseSearchTerms, ...expandedTerms])
-  );
-  const maxInvested = Math.max(1, ...allResults.map((r) => r.totalInvested));
+  // ── 5. Compute final hybrid scores ──
+  // Normalize tsvector ranks to 0-1 range
+  const maxTsvectorRank = Math.max(0.001, ...tsvectorScoreMap.values());
+  const maxInvested = Math.max(1, ...candidates.map((r) => r.totalInvested));
 
-  // 최소 점수 임계점 — 관련성이 너무 낮은 결과 제외
-  const MIN_SCORE_THRESHOLD = 0.20;
-  // 관련성 자체가 너무 낮은 결과도 제외 (투자 점수만으로 올라온 무관한 결과 방지)
-  const MIN_RELEVANCE_THRESHOLD = 0.15;
+  const MIN_SCORE_THRESHOLD = 0.15;
 
-  const scoredResults = allResults.map((result) => {
-    const targetTexts = [
-      result.title ?? "",
-      result.summary ?? "",
-      result.searchKeywords ?? "",
-      ...(result.messages?.map((m) => m.content) ?? []),
-    ];
-
-    const textMatchCount = countTextMatches(allSearchTerms, targetTexts);
+  const scoredResults = candidates.map((result) => {
+    const rawTsvectorRank = tsvectorScoreMap.get(result.id) ?? 0;
+    const tsvectorScore = rawTsvectorRank / maxTsvectorRank; // normalized 0-1
     const vectorSimilarity = vectorScoreMap.get(result.id) ?? 0;
 
-    const scoreResult = calculateHybridScore({
-      textMatchCount,
-      totalSearchTerms: allSearchTerms.length,
-      vectorSimilarity,
-      totalInvested: result.totalInvested,
-      maxInvested,
-      relevanceWeight,
-    });
+    // Investment score (log-scaled)
+    const investScore =
+      maxInvested > 0
+        ? Math.log1p(result.totalInvested) / Math.log1p(maxInvested)
+        : 0;
+
+    // Relevance = weighted combination of tsvector and vector similarity
+    // If only one source found this result, use what we have
+    const hasTsvector = rawTsvectorRank > 0;
+    const hasVector = vectorSimilarity > 0;
+
+    let relevanceScore: number;
+    if (hasTsvector && hasVector) {
+      relevanceScore = 0.3 * tsvectorScore + 0.7 * vectorSimilarity;
+    } else if (hasVector) {
+      relevanceScore = vectorSimilarity;
+    } else {
+      relevanceScore = tsvectorScore;
+    }
+
+    // Final score: relevance vs investment weighted by user preference
+    const finalScore =
+      relevanceWeight * relevanceScore + (1 - relevanceWeight) * investScore;
 
     return {
       ...result,
-      _score: scoreResult.finalScore,
-      _relevanceScore: scoreResult.relevanceScore,
-      _investScore: scoreResult.investScore,
-      _textScore: scoreResult.textScore,
-      _vectorScore: scoreResult.vectorScore,
+      _score: finalScore,
+      _relevanceScore: relevanceScore,
+      _investScore: investScore,
+      _textScore: tsvectorScore,
+      _vectorScore: vectorSimilarity,
     };
   });
 
-  // ── 7. 임계점 필터 + 정렬 + 페이지네이션 ──
-  const filteredResults = scoredResults.filter((r) => r._score >= MIN_SCORE_THRESHOLD && r._relevanceScore >= MIN_RELEVANCE_THRESHOLD);
+  // ── 6. Filter + sort + paginate ──
+  const filteredResults = scoredResults.filter(
+    (r) => r._score >= MIN_SCORE_THRESHOLD
+  );
   filteredResults.sort((a, b) => b._score - a._score);
 
   const total = filteredResults.length;
@@ -200,16 +147,119 @@ export async function GET(req: NextRequest) {
   const skip = (page - 1) * limit;
   const pagedResults = filteredResults.slice(skip, skip + limit);
 
-  const results = pagedResults.map(({ _score, _relevanceScore, _investScore, _textScore, _vectorScore, ...rest }) => ({
-    ...rest,
-    scoreDetail: {
-      total: Math.round(_score * 100),
-      relevance: Math.round(_relevanceScore * 100),
-      invest: Math.round(_investScore * 100),
-      text: Math.round(_textScore * 100),
-      vector: Math.round(_vectorScore * 100),
-    },
-  }));
+  const results = pagedResults.map(
+    ({ _score, _relevanceScore, _investScore, _textScore, _vectorScore, ...rest }) => ({
+      ...rest,
+      scoreDetail: {
+        total: Math.round(_score * 100),
+        relevance: Math.round(_relevanceScore * 100),
+        invest: Math.round(_investScore * 100),
+        text: Math.round(_textScore * 100),
+        vector: Math.round(_vectorScore * 100),
+      },
+    })
+  );
+
+  return NextResponse.json({
+    results,
+    total,
+    page,
+    totalPages,
+    expandedTerms,
+    relevanceWeight: Math.round(relevanceWeight * 100),
+  });
+}
+
+/**
+ * Fallback text search when tsvector/pgvector are not available or return no results.
+ * Uses Prisma `contains` queries (like the old implementation).
+ */
+async function fallbackTextSearch(
+  query: string,
+  expandedTerms: string[],
+  page: number,
+  limit: number,
+  relevanceWeight: number,
+  queryEmbedding: number[] | null
+) {
+  const baseTokens = query.split(/\s+/).filter((t) => t.length >= 2);
+  const allTerms = Array.from(new Set([query, ...baseTokens, ...expandedTerms]));
+
+  const termConditions = allTerms.flatMap((term) => [
+    { title: { contains: term } },
+    { summary: { contains: term } },
+    { searchKeywords: { contains: term } },
+  ]);
+
+  if (termConditions.length === 0) {
+    return NextResponse.json({
+      results: [],
+      total: 0,
+      page,
+      totalPages: 0,
+      expandedTerms,
+    });
+  }
+
+  const textResults = await prisma.qASet.findMany({
+    where: { isShared: true, OR: termConditions },
+    take: 100,
+    include: qaSetInclude,
+  });
+
+  // Simple scoring for fallback
+  const maxInvested = Math.max(1, ...textResults.map((r) => r.totalInvested));
+  const baseTokensLower = allTerms.map((t) => t.toLowerCase());
+
+  const scored = textResults.map((result) => {
+    const texts = [
+      result.title ?? "",
+      result.summary ?? "",
+      result.searchKeywords ?? "",
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    let matchCount = 0;
+    for (const term of baseTokensLower) {
+      if (texts.includes(term)) matchCount++;
+    }
+    const textScore = baseTokensLower.length > 0 ? matchCount / baseTokensLower.length : 0;
+    const investScore =
+      maxInvested > 0
+        ? Math.log1p(result.totalInvested) / Math.log1p(maxInvested)
+        : 0;
+    const finalScore = relevanceWeight * textScore + (1 - relevanceWeight) * investScore;
+
+    return {
+      ...result,
+      _score: finalScore,
+      _relevanceScore: textScore,
+      _investScore: investScore,
+      _textScore: textScore,
+      _vectorScore: 0,
+    };
+  });
+
+  scored.sort((a, b) => b._score - a._score);
+
+  const total = scored.length;
+  const totalPages = Math.ceil(total / limit);
+  const skip = (page - 1) * limit;
+  const pagedResults = scored.slice(skip, skip + limit);
+
+  const results = pagedResults.map(
+    ({ _score, _relevanceScore, _investScore, _textScore, _vectorScore, ...rest }) => ({
+      ...rest,
+      scoreDetail: {
+        total: Math.round(_score * 100),
+        relevance: Math.round(_relevanceScore * 100),
+        invest: Math.round(_investScore * 100),
+        text: Math.round(_textScore * 100),
+        vector: Math.round(_vectorScore * 100),
+      },
+    })
+  );
 
   return NextResponse.json({
     results,

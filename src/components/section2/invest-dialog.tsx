@@ -67,11 +67,11 @@ export function InvestDialog({ open, onOpenChange, qaSet, onInvested }: InvestDi
         try { localStorage.setItem("ci-onboarding-invested", "true"); } catch {}
 
         if (data.trustLevelUp) {
-          setSuccessMessage(`경작 완료! 신뢰 레벨이 Lv.${data.trustLevelUp.newLevel}로 올랐습니다!`);
+          setSuccessMessage(`투자 완료! 신뢰 레벨이 Lv.${data.trustLevelUp.newLevel}로 올랐습니다!`);
         } else if (data.poolRelease) {
-          setSuccessMessage(`경작 완료! 마일스톤 달성으로 보너스 ${data.poolRelease.releasedAmount}P가 배분됩니다!`);
+          setSuccessMessage(`투자 완료! 마일스톤 달성으로 보너스 ${data.poolRelease.releasedAmount}P가 배분됩니다!`);
         } else {
-          setSuccessMessage("경작 완료!");
+          setSuccessMessage("투자 완료!");
         }
 
         setTimeout(() => {
@@ -81,7 +81,7 @@ export function InvestDialog({ open, onOpenChange, qaSet, onInvested }: InvestDi
         }, 2000);
       } else {
         const error = await res.json();
-        alert(error.error || error.message || "경작에 실패했습니다.");
+        alert(error.error || error.message || "투자에 실패했습니다.");
       }
     } catch (error) {
       console.error("Invest error:", error);
@@ -101,10 +101,10 @@ export function InvestDialog({ open, onOpenChange, qaSet, onInvested }: InvestDi
         ) : (
         <>
         <DialogHeader>
-          <DialogTitle className="text-base">🌱 경작하기</DialogTitle>
+          <DialogTitle className="text-base">💰 투자하기</DialogTitle>
           <DialogDescription className="text-sm">
-            이 Q&A가 가치 있다면 포인트로 경작하세요.
-            다른 사람도 경작하면 수확 보상을 받습니다.
+            이 Q&A가 가치 있다면 포인트로 투자하세요.
+            다른 사람도 투자하면 수익 보상을 받습니다.
           </DialogDescription>
         </DialogHeader>
 
@@ -112,7 +112,7 @@ export function InvestDialog({ open, onOpenChange, qaSet, onInvested }: InvestDi
           {/* Amount slider */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium">경작 포인트</label>
+              <label className="text-sm font-medium">투자 포인트</label>
               <span className="text-xs text-muted-foreground">보유: {balance}P</span>
             </div>
             <Slider
@@ -147,7 +147,7 @@ export function InvestDialog({ open, onOpenChange, qaSet, onInvested }: InvestDi
 
           {/* Balance feedback */}
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>경작 후 잔액: <span className={`font-medium ${balance - investAmount < 100 ? "text-orange-500" : "text-foreground"}`}>{balance - investAmount}P</span></span>
+            <span>투자 후 잔액: <span className={`font-medium ${balance - investAmount < 100 ? "text-orange-500" : "text-foreground"}`}>{balance - investAmount}P</span></span>
             <span>({Math.round((investAmount / balance) * 100)}% 사용)</span>
           </div>
 
@@ -155,7 +155,7 @@ export function InvestDialog({ open, onOpenChange, qaSet, onInvested }: InvestDi
           <div className="p-3 rounded-lg bg-muted/50 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <span className="text-base">💡</span>
-              <span>현재 {investorCount}명이 경작 중이에요. 일찍 경작할수록 더 많은 수확을 받아요.</span>
+              <span>현재 {investorCount}명이 투자 중이에요. 일찍 투자할수록 더 많은 수익을 받아요.</span>
             </div>
           </div>
 
@@ -177,7 +177,7 @@ export function InvestDialog({ open, onOpenChange, qaSet, onInvested }: InvestDi
             취소
           </Button>
           <Button onClick={handleInvest} disabled={isInvesting || investAmount <= 0}>
-            {isInvesting ? "처리 중..." : `🌱 ${investAmount}P 경작하기`}
+            {isInvesting ? "처리 중..." : `💰 ${investAmount}P 투자하기`}
           </Button>
         </DialogFooter>
         </>

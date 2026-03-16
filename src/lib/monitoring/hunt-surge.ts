@@ -1,6 +1,6 @@
 /**
- * 사냥 급증 감지
- * 특정 QASet에 짧은 시간 내 다수의 사냥이 집중되는 패턴을 감지
+ * 반대 투자 급증 감지
+ * 특정 QASet에 짧은 시간 내 다수의 반대 투자가 집중되는 패턴을 감지
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -15,8 +15,8 @@ export interface HuntSurgeAlert {
 }
 
 /**
- * 최근 N시간 내 사냥 급증 QASet 감지
- * 기준: windowHours 내 3건 이상의 사냥이 발생한 경우
+ * 최근 N시간 내 반대 투자 급증 QASet 감지
+ * 기준: windowHours 내 3건 이상의 반대 투자가 발생한 경우
  */
 export async function detectHuntSurges(
   prisma: PrismaClient,

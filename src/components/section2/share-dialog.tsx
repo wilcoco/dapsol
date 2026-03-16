@@ -56,7 +56,7 @@ export function ShareDialog({ open, onOpenChange, qaSet, onShared }: ShareDialog
         }, 2500);
       } else {
         const error = await res.json();
-        alert(error.error || "영토 공개에 실패했습니다.");
+        alert(error.error || "공유에 실패했습니다.");
       }
     } catch (error) {
       console.error("Share error:", error);
@@ -71,17 +71,17 @@ export function ShareDialog({ open, onOpenChange, qaSet, onShared }: ShareDialog
         {shareSuccess ? (
           <div className="py-8 text-center space-y-3">
             <div className="text-4xl">&#x2705;</div>
-            <h3 className="text-lg font-semibold">영토가 공개되었습니다!</h3>
+            <h3 className="text-lg font-semibold">Q&A가 공유되었습니다!</h3>
             <p className="text-sm text-muted-foreground">
-              다른 사람들이 경작하면 수확 보상을 받을 수 있어요.
+              다른 사람들이 투자하면 수익 보상을 받을 수 있어요.
             </p>
           </div>
         ) : (
         <>
         <DialogHeader>
-          <DialogTitle>🏴 영토 공개</DialogTitle>
+          <DialogTitle>공유하기</DialogTitle>
           <DialogDescription>
-            이 Q&A를 커뮤니티에 영토로 공개하고, 경작 포인트를 걸어 자신감을 표현하세요.
+            이 Q&A를 커뮤니티에 공유하고, 투자 포인트를 걸어 자신감을 표현하세요.
           </DialogDescription>
         </DialogHeader>
 
@@ -111,11 +111,11 @@ export function ShareDialog({ open, onOpenChange, qaSet, onShared }: ShareDialog
           {/* Investment slider */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium">초기 경작 포인트</label>
+              <label className="text-sm font-medium">초기 투자 포인트</label>
               <span className="text-xs text-muted-foreground">최대 {maxInvestment}P</span>
             </div>
             <p className="text-xs text-muted-foreground mb-2">
-              높게 걸수록 검색에서 더 잘 보이고, 후속 경작 수확도 커집니다.
+              높게 걸수록 검색에서 더 잘 보이고, 후속 투자 수익도 커집니다.
             </p>
             <Slider
               value={[investAmount]}
@@ -144,7 +144,7 @@ export function ShareDialog({ open, onOpenChange, qaSet, onShared }: ShareDialog
               <span className="font-mono">{balance - investAmount}P</span>
             </div>
             <div className="text-xs text-muted-foreground mt-2">
-              다른 사람이 이 Q&A를 경작하면 포인트의 일부가 수확으로 돌아옵니다.
+              다른 사람이 이 Q&A를 투자하면 포인트의 일부가 수익으로 돌아옵니다.
             </div>
           </div>
         </div>
@@ -154,7 +154,7 @@ export function ShareDialog({ open, onOpenChange, qaSet, onShared }: ShareDialog
             취소
           </Button>
           <Button onClick={handleShare} disabled={isSharing || investAmount <= 0}>
-            {isSharing ? "처리 중..." : `${investAmount}P 걸고 영토 공개`}
+            {isSharing ? "처리 중..." : `${investAmount}P 걸고 공유하기`}
           </Button>
         </DialogFooter>
         </>

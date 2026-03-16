@@ -133,17 +133,17 @@ export default function HomePage() {
               href="/login"
               className="p-4 rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 text-center space-y-2 hover:shadow-lg hover:scale-105 transition-all"
             >
-              <div className="text-2xl">⛏️</div>
-              <h3 className="font-semibold text-sm">개척하기</h3>
+              <div className="text-2xl">📝</div>
+              <h3 className="font-semibold text-sm">질문하기</h3>
               <p className="text-[10px] text-muted-foreground leading-snug">AI에게<br />질문하세요</p>
             </Link>
             <Link
               href="/login"
               className="p-4 rounded-xl border-2 border-green-200 dark:border-green-800 bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 text-center space-y-2 hover:shadow-lg hover:scale-105 transition-all"
             >
-              <div className="text-2xl">🌾</div>
-              <h3 className="font-semibold text-sm">경작하기</h3>
-              <p className="text-[10px] text-muted-foreground leading-snug">좋은 Q&A를<br />키우세요</p>
+              <div className="text-2xl">📈</div>
+              <h3 className="font-semibold text-sm">투자하기</h3>
+              <p className="text-[10px] text-muted-foreground leading-snug">좋은 Q&A에<br />투자하세요</p>
             </Link>
             <Link
               href="/login"
@@ -170,8 +170,8 @@ export default function HomePage() {
   }
 
   const tabs: { key: ActiveTab; label: string; icon: string }[] = [
-    { key: "territory", label: "영토", icon: "🏠" },
-    { key: "pioneer", label: "개척", icon: "✨" },
+    { key: "territory", label: "홈", icon: "🏠" },
+    { key: "pioneer", label: "질문", icon: "✨" },
     { key: "map", label: "지도", icon: "🗺️" },
     { key: "profile", label: "나", icon: "👤" },
   ];
@@ -206,7 +206,7 @@ export default function HomePage() {
 
       {/* Main content */}
       <main className="flex-1 overflow-hidden">
-        {/* 🏠 영토: 검색 + Q&A 워크스페이스 */}
+        {/* 🏠 홈: 검색 + Q&A 워크스페이스 */}
         <div className={activeTab === "territory" ? "block h-full" : "hidden"}>
           <div className="h-full relative">
             <div className={activeQASet ? "hidden" : "block h-full"}>
@@ -233,7 +233,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* ✨ 개척: 🤖→👤 AI가 인간에게 질문하는 갭 목록 */}
+        {/* ✨ 질문: 🤖→👤 AI가 인간에게 질문하는 갭 목록 */}
         <div className={activeTab === "pioneer" ? "block h-full" : "hidden"}>
           <AnswerGaps
             onAnswerGap={(gapId, description) => {
@@ -305,7 +305,7 @@ function LandingActivityFeed() {
     return `${Math.floor(mins / 60)}시간 전`;
   };
 
-  const icons: Record<string, string> = { share: "⛏️", invest: "🌾", hunt: "🏹", milestone: "🏆" };
+  const icons: Record<string, string> = { share: "📝", invest: "📈", hunt: "📉", milestone: "🏆" };
 
   return (
     <div className="mb-6">
@@ -345,8 +345,8 @@ function LandingTrending() {
   return (
     <div className="mb-6">
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-sm font-semibold">🔥 지금 뜨거운 영토</span>
-        <span className="text-xs text-muted-foreground">읽기만 가능 · 경작은 로그인 후</span>
+        <span className="text-sm font-semibold">🔥 지금 인기 Q&A</span>
+        <span className="text-xs text-muted-foreground">읽기만 가능 · 투자는 로그인 후</span>
       </div>
       <div className="divide-y divide-border/50">
         {qas.map((qa: any) => (
@@ -354,8 +354,8 @@ function LandingTrending() {
             <p className="text-sm font-medium">{qa.title ?? "제목 없음"}</p>
             <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
               <span>{qa.creator?.name ?? "익명"}</span>
-              <span>🌾 {qa.totalInvested ?? 0}</span>
-              <span>{qa.investorCount ?? 0}명 경작 중</span>
+              <span>📈 {qa.totalInvested ?? 0}</span>
+              <span>{qa.investorCount ?? 0}명 투자 중</span>
             </div>
           </div>
         ))}

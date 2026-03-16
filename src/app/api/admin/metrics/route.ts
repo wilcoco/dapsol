@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/admin/metrics — 경제 시스템 건전성 메트릭
- * 총 유통 포인트, 소각량, 활성 경작/사냥, 사용자 분포 등
+ * 총 유통 포인트, 소각량, 활성 투자/반대 투자, 사용자 분포 등
  */
 export async function GET() {
   const session = await auth();

@@ -20,7 +20,7 @@ export async function POST(
   const { investAmount, creatorNote } = await req.json();
 
   if (!investAmount || investAmount <= 0) {
-    return NextResponse.json({ error: "경작 포인트를 입력해주세요." }, { status: 400 });
+    return NextResponse.json({ error: "투자 포인트를 입력해주세요." }, { status: 400 });
   }
 
   // Get user and Q&A set
@@ -51,7 +51,7 @@ export async function POST(
   const authority = user.authorityScore ?? 100;
   if (investAmount > authority) {
     return NextResponse.json({
-      error: `현재 Authority(${Math.round(authority)})보다 많이 경작할 수 없습니다.`,
+      error: `현재 Authority(${Math.round(authority)})보다 많이 투자할 수 없습니다.`,
       code: "AUTHORITY_LIMIT",
       maxInvestment: Math.floor(authority),
     }, { status: 400 });

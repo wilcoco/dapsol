@@ -142,7 +142,7 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
             <div className="text-2xl font-bold">{profile.user.balance}P</div>
             {profile.user.balance > 0 && hasNoInvestments && (
               <p className="text-[11px] text-muted-foreground mt-1">
-                좋은 Q&A를 경작해보세요
+                좋은 Q&A를 투자해보세요
 </p>
             )}
           </CardContent>
@@ -157,7 +157,7 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
               <p className="text-[11px] text-muted-foreground mt-1">아래에서 시작하세요</p>
             ) : hasUnshared ? (
               <p className="text-[11px] text-muted-foreground mt-1">
-                영토를 공개하면 경작을 받을 수 있어요
+                Q&A를 공유하면 투자를 받을 수 있어요
 </p>
             ) : (
               <div className="text-xs text-muted-foreground mt-1">{stats.sharedQASets}개 공유됨</div>
@@ -166,12 +166,12 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">경작한 Q&A</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">투자한 Q&A</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalInvestments}</div>
             {hasNoInvestments ? (
-              <p className="text-[11px] text-muted-foreground mt-1">좋은 Q&A를 경작해보세요</p>
+              <p className="text-[11px] text-muted-foreground mt-1">좋은 Q&A에 투자해보세요</p>
             ) : (
               <div className="text-xs text-muted-foreground mt-1">{stats.totalAmountInvested}P 사용</div>
             )}
@@ -185,7 +185,7 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
             <div className="text-2xl font-bold text-green-600">{stats.totalRewardsReceived}P</div>
             {stats.totalRewardsReceived === 0 && stats.totalInvestments > 0 && (
               <p className="text-[11px] text-muted-foreground mt-1">
-                경작한 Q&A에 다른 사람이 경작하면 수확을 받아요
+                투자한 Q&A에 다른 사람이 투자하면 수익을 받아요
               </p>
             )}
           </CardContent>
@@ -200,7 +200,7 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
             <h3 className="font-medium text-lg">아직 활동이 없습니다</h3>
             <p className="text-sm text-muted-foreground max-w-sm mx-auto">
               AI에게 질문하고, 좋은 대화는 공유하세요.<br />
-              다른 사람이 경작하면 보상이 돌아옵니다.
+              다른 사람이 투자하면 보상이 돌아옵니다.
             </p>
             <div className="flex gap-2 mt-2">
               <Button onClick={onGoToSearch}>
@@ -239,9 +239,9 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span>메시지 {qa._count.messages}개</span>
-                      {qa.totalInvested > 0 && <span>🌱 {qa.totalInvested}P ({qa.investorCount}명)</span>}
+                      {qa.totalInvested > 0 && <span>💰 {qa.totalInvested}P ({qa.investorCount}명)</span>}
                       {!qa.isShared && qa._count.messages >= 2 && (
-                        <span className="text-primary font-medium">영토를 공개하면 경작을 받을 수 있어요</span>
+                        <span className="text-primary font-medium">Q&A를 공유하면 투자를 받을 수 있어요</span>
                       )}
                     </div>
                   </div>
@@ -258,7 +258,7 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
       {/* My Recommendations */}
       {recentInvestments.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold">내 경작 목록</h2>
+          <h2 className="text-lg font-semibold">내 투자 목록</h2>
           <div className="grid gap-3">
             {recentInvestments.filter(inv => inv.isPositive).map((inv, idx) => {
               const { earned, roi } = getInvestmentROI(inv.qaSet.id, inv.amount);
@@ -272,7 +272,7 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
                     <div className="min-w-0 flex-1">
                       <div className="font-medium truncate mb-1">{inv.qaSet.title || "제목 없음"}</div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span>🌱 {inv.amount}P 경작</span>
+                        <span>💰 {inv.amount}P 투자</span>
                         {earned > 0 && <span className="text-green-600">+{earned}P 보상</span>}
                       </div>
                     </div>
@@ -280,7 +280,7 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
                       <div className={`text-sm font-semibold ${roi > 0 ? "text-green-600" : roi < 0 ? "text-red-500" : "text-muted-foreground"}`}>
                         {roi > 0 ? "+" : ""}{roi.toFixed(0)}%
                       </div>
-                      <div className="text-[10px] text-muted-foreground">{idx === 0 ? "경작 대비 수확" : "수익률"}</div>
+                      <div className="text-[10px] text-muted-foreground">{idx === 0 ? "투자 대비 수익" : "수익률"}</div>
                     </div>
                   </CardContent>
                 </Card>
@@ -293,12 +293,12 @@ export function MyDashboard({ onSelectQASet, onGoToSearch, onGoToAnswer }: MyDas
       {/* Empty recommendations with CTA */}
       {!hasNoQASets && hasNoInvestments && (
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold">내 경작 목록</h2>
+          <h2 className="text-lg font-semibold">내 투자 목록</h2>
           <Card className="border-dashed">
             <CardContent className="py-8 text-center space-y-2">
-              <div className="text-3xl">🌱</div>
+              <div className="text-3xl">💰</div>
               <p className="text-sm text-muted-foreground">
-                다른 사람의 Q&A를 경작하면 여기에 표시됩니다.
+                다른 사람의 Q&A에 투자하면 여기에 표시됩니다.
               </p>
               <Button variant="outline" size="sm" onClick={onGoToSearch}>
                 인기 Q&A 둘러보기

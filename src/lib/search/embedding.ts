@@ -1,5 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { embedMany, embed } from "ai";
+import { prisma } from "@/lib/prisma";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const MAX_TEXT_LENGTH = 1000;
@@ -187,6 +188,61 @@ export async function checkPgvectorStatus(prisma: any): Promise<{
     return { extensionInstalled, columnExists, indexExists, vectorCount };
   } catch {
     return { extensionInstalled: false, columnExists: false, indexExists: false, vectorCount: 0 };
+  }
+}
+
+/**
+ * tsvector full-text search using PostgreSQL GIN index
+ * Uses 'simple' dictionary (works for Korean via whitespace splitting)
+ * Returns candidate IDs with ts_rank_cd scores
+ */
+export async function tsvectorSearch(
+  query: string,
+  limit: number = 200
+): Promise<{ id: string; rank: number }[]> {
+  // Split on whitespace, filter short tokens, sanitize for tsquery
+  const terms = query
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t.length >= 2)
+    .map((t) => t.replace(/['"\\&|!():*<>]/g, ""));
+
+  if (terms.length === 0) return [];
+
+  const tsquery = terms.join(" | ");
+
+  try {
+    const results = await prisma.$queryRaw<{ id: string; rank: number }[]>`
+      SELECT id, ts_rank_cd(search_vector, to_tsquery('simple', ${tsquery})) as rank
+      FROM "QASet"
+      WHERE "isShared" = true
+        AND search_vector @@ to_tsquery('simple', ${tsquery})
+      ORDER BY rank DESC
+      LIMIT ${limit}
+    `;
+
+    return results;
+  } catch (error) {
+    // Graceful degradation: tsvector column may not exist yet (migration not run)
+    console.warn("[tsvector] Full-text search failed, column may not exist:", error);
+    return [];
+  }
+}
+
+/**
+ * Check if tsvector search is available (migration has been run)
+ */
+export async function checkTsvectorStatus(): Promise<boolean> {
+  try {
+    const result = await prisma.$queryRaw<{ exists: boolean }[]>`
+      SELECT EXISTS(
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'QASet' AND column_name = 'search_vector'
+      ) as exists
+    `;
+    return result[0]?.exists ?? false;
+  } catch {
+    return false;
   }
 }
 

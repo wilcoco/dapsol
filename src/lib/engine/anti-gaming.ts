@@ -42,7 +42,7 @@ export async function checkInvestmentRules(
   if (!isNegative && userId === qaSetCreatorId) {
     return {
       code: "SELF_INVESTMENT",
-      message: "본인이 만든 Q&A에는 추가 경작할 수 없습니다. (공유 시 첫 경작만 허용)",
+      message: "본인이 만든 Q&A에는 추가 투자할 수 없습니다. (공유 시 첫 투자만 허용)",
       statusCode: 403,
     };
   }
@@ -54,7 +54,7 @@ export async function checkInvestmentRules(
   if (accountAgeDays < WARMUP_DAYS && amount > WARMUP_MAX_INVESTMENT) {
     return {
       code: "WARMUP_LIMIT",
-      message: `가입 ${WARMUP_DAYS}일 이내에는 1회 최대 ${WARMUP_MAX_INVESTMENT} 🌱만 경작할 수 있습니다. (현재 계정 나이: ${Math.floor(accountAgeDays)}일)`,
+      message: `가입 ${WARMUP_DAYS}일 이내에는 1회 최대 ${WARMUP_MAX_INVESTMENT} 💰만 투자할 수 있습니다. (현재 계정 나이: ${Math.floor(accountAgeDays)}일)`,
       statusCode: 400,
     };
   }
@@ -72,7 +72,7 @@ export async function checkInvestmentRules(
   if (recentSameQA > 0) {
     return {
       code: "REINVESTMENT_COOLDOWN",
-      message: `동일 Q&A에 ${isNegative ? "재사냥" : "재경작"}하려면 ${REINVESTMENT_COOLDOWN_HOURS}시간을 기다려야 합니다.`,
+      message: `동일 Q&A에 ${isNegative ? "재반대 투자" : "재투자"}하려면 ${REINVESTMENT_COOLDOWN_HOURS}시간을 기다려야 합니다.`,
       statusCode: 429,
     };
   }
@@ -145,7 +145,7 @@ export async function detectMutualInvestment(
     console.warn(`[AntiGaming] 상호 투자 차단: ${investorId} ↔ ${creatorId} (Q&A: ${qaSetId})`);
     return {
       code: "MUTUAL_INVESTMENT",
-      message: "상호 경작이 감지되었습니다. 24시간 내 서로의 Q&A에 경작할 수 없습니다.",
+      message: "상호 투자가 감지되었습니다. 24시간 내 서로의 Q&A에 투자할 수 없습니다.",
       statusCode: 403,
     };
   }

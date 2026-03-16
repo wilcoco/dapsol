@@ -230,7 +230,7 @@ export function formatRAGContext(results: RAGResult[]): string {
   const entries = results.map((r) => {
     const trustSignal = r.negativeCount > 0
       ? `⚠ ${r.negativeCount}명이 오류를 지적함`
-      : `✓ ${r.investorCount}명이 경작(추천)함`;
+      : `✓ ${r.investorCount}명이 투자(추천)함`;
     const evidenceStr = r.evidence.length > 0
       ? `\n  근거: ${r.evidence.slice(0, 2).join("; ")}`
       : "";

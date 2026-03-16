@@ -38,7 +38,7 @@ export async function generateControversyQuestion(qaSetId: string): Promise<void
     .join("\n");
 
   const typeLabel = {
-    hunted: "마이너스 투자(사냥)가 많이 발생",
+    hunted: "마이너스 투자(반대 투자)가 많이 발생",
     disputed: "반박 또는 모순 관계가 형성",
     low_quality: "부정적 평가를 받았으나 개선되지 않음",
   }[controversyType];

@@ -14,6 +14,7 @@ import { HuntDialog } from "./hunt-dialog";
 import { UNINVEST_WINDOW_HOURS } from "@/lib/engine/uninvestment";
 import { ParentComparePanel } from "./parent-compare-panel";
 import { InvestorComments } from "./investor-comments";
+import { ReviewGuide } from "./review-guide";
 import { ArrowLeft } from "lucide-react";
 
 interface Section2Props {
@@ -199,7 +200,7 @@ export function Section2Workspace({
   const shouldShowRecommendHint = isSharedNotOwner && !dismissedRecommendHint && messages.length >= 2;
 
   const handleUninvest = async (investmentId: string) => {
-    if (!confirm("경작을 철회하시겠습니까? 원금의 20%가 차감됩니다.")) return;
+    if (!confirm("투자를 철회하시겠습니까? 원금의 20%가 차감됩니다.")) return;
     setUninvestingId(investmentId);
     try {
       const res = await fetch(`/api/investments/${investmentId}/uninvest`, { method: "POST" });
@@ -243,7 +244,7 @@ export function Section2Workspace({
                   onClick={() => setShowInvestors(v => !v)}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  🌱 {totalRecommended}P · {recommendCount}명 경작
+                  💰 {totalRecommended}P · {recommendCount}명 투자
                 </button>
               )}
             </div>
@@ -273,11 +274,11 @@ export function Section2Workspace({
       {/* Stat bar for shared Q&A */}
       {qaSet.isShared && (
         <div className="px-4 py-1.5 border-b bg-muted/20 flex items-center gap-4 text-xs text-muted-foreground">
-          <span>🌱 {totalRecommended}P 경작됨</span>
-          <span>{recommendCount}명 경작</span>
+          <span>💰 {totalRecommended}P 투자됨</span>
+          <span>{recommendCount}명 투자</span>
           <span>메시지 {messages.length}개</span>
           {(qaSet.negativeCount ?? 0) > 0 && (
-            <span className="text-red-500">🏹 {qaSet.negativeInvested ?? 0}P · {qaSet.negativeCount}명 사냥</span>
+            <span className="text-red-500">📉 {qaSet.negativeInvested ?? 0}P · {qaSet.negativeCount}명 반대 투자</span>
           )}
         </div>
       )}
@@ -285,7 +286,7 @@ export function Section2Workspace({
       {/* Investor list (toggle) */}
       {showInvestors && qaSet.isShared && (qaSet.investments ?? []).length > 0 && (
         <div className="border-b bg-muted/20 px-4 py-2 space-y-1.5 text-xs">
-          <div className="font-medium text-muted-foreground mb-1">경작자</div>
+          <div className="font-medium text-muted-foreground mb-1">투자자</div>
           {(qaSet.investments ?? []).filter(inv => !inv.isNegative).map((inv) => {
             const isMine = inv.userId === session?.user?.id;
             const investedAt = new Date(inv.createdAt);
@@ -452,11 +453,11 @@ export function Section2Workspace({
             <div className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800">
               <div className="flex-1">
                 <p className="text-sm font-medium text-foreground">이 대화가 도움이 되었나요?</p>
-                <p className="text-xs text-muted-foreground mt-0.5">영토를 공개하면 다른 사람도 참고하고, 경작을 받으면 보상이 돌아옵니다.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Q&A를 공유하면 다른 사람도 참고하고, 투자를 받으면 보상이 돌아옵니다.</p>
               </div>
               <div className="flex gap-2 shrink-0">
                 <Button size="sm" onClick={() => setShowShareDialog(true)}>
-                  🏴 영토 공개
+                  공유하기
                 </Button>
                 <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setDismissedShareHint(true)}>
                   나중에
@@ -470,11 +471,11 @@ export function Section2Workspace({
             <div className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-200 dark:border-amber-800">
               <div className="flex-1">
                 <p className="text-sm font-medium text-foreground">이 Q&A가 도움이 되었나요?</p>
-                <p className="text-xs text-muted-foreground mt-0.5">경작하면 좋은 지식을 먼저 발견한 수확을 받을 수 있어요.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">투자하면 좋은 지식을 먼저 발견한 수익을 받을 수 있어요.</p>
               </div>
               <div className="flex gap-2 shrink-0">
                 <Button size="sm" onClick={() => setShowInvestDialog(true)}>
-                  🌱 경작하기
+                  💰 투자하기
                 </Button>
                 <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setDismissedRecommendHint(true)}>
                   나중에
@@ -485,13 +486,31 @@ export function Section2Workspace({
         </div>
       </div>
 
+      {/* ── AI Review Guide — 메시지 아래, 입력 위 ── */}
+      {hasMessages && !isStreaming && (
+        <ReviewGuide
+          qaSet={qaSet}
+          isOwner={isOwner}
+          onInvest={() => setShowInvestDialog(true)}
+          onCounterInvest={() => setShowHuntDialog(true)}
+          onShareQA={() => setShowShareDialog(true)}
+          onOpinionSubmitted={async () => {
+            const res = await fetch(`/api/qa-sets/${qaSet.id}`);
+            if (res.ok) onQASetUpdated(await res.json());
+          }}
+          onAskFollowUp={(question) => {
+            setInput(question);
+          }}
+        />
+      )}
+
       {/* Input area — always visible, with inline action buttons */}
       <div className="border-t p-4">
         {/* Human answer mode banner */}
         {humanAnswerMode && messages.length <= 1 && (
           <div className="max-w-3xl mx-auto mb-3 p-3 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800">
             <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">✍️ 내 경험과 지식으로 직접 답변해주세요</p>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">답변 후 영토를 공개하면 다른 사람이 경작할 수 있고, 보상이 돌아옵니다.</p>
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">답변 후 Q&A를 공유하면 다른 사람이 투자할 수 있고, 보상이 돌아옵니다.</p>
           </div>
         )}
         <div className="max-w-3xl mx-auto flex gap-2">
@@ -531,7 +550,7 @@ export function Section2Workspace({
                 ? "확장 시작"
                 : "전송"}
           </Button>
-          {/* Inline share/recommend button next to input */}
+          {/* Share button for unshared owner Q&A (when ReviewGuide not showing) */}
           {isOwner && !qaSet.isShared && hasMessages && (
             <Button
               variant="outline"
@@ -539,27 +558,7 @@ export function Section2Workspace({
               className="self-end text-xs shrink-0"
               onClick={() => setShowShareDialog(true)}
             >
-              🏴 공개
-            </Button>
-          )}
-          {isSharedNotOwner && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="self-end text-xs shrink-0"
-              onClick={() => setShowInvestDialog(true)}
-            >
-              🌱
-            </Button>
-          )}
-          {isSharedNotOwner && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="self-end text-xs shrink-0 text-red-500 hover:text-red-700 border-red-200"
-              onClick={() => setShowHuntDialog(true)}
-            >
-              🏹
+              공유
             </Button>
           )}
         </div>

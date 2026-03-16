@@ -104,7 +104,7 @@ export const RELATION_TYPES = KNOWLEDGE_RELATION_TYPES;
 export type RelationType = KnowledgeRelationType;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 사냥 사유 (Hunting Reason Types)
+// 반대 사유 (Hunting Reason Types)
 // — AI 답변의 문제를 발견했을 때 분류
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -120,7 +120,7 @@ export const HUNTING_REASON_TYPES = [
 
 export type HuntingReasonType = (typeof HUNTING_REASON_TYPES)[number]["value"];
 
-/** 사냥 사유 라벨 조회 */
+/** 반대 사유 라벨 조회 */
 export const HUNTING_REASON_LABELS: Record<string, string> = Object.fromEntries(
   HUNTING_REASON_TYPES.map((t) => [t.value, t.label])
 );

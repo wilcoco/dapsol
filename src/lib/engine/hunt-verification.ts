@@ -35,8 +35,8 @@ Be fair — if the criticism has any merit, mark as valid. Only reject clearly i
         content: `## AI 답변 내용:
 ${qaContent.slice(0, 2000)}
 
-## 사냥 사유: ${huntingReason}
-## 사냥 근거: ${huntingEvidence}
+## 반대 사유: ${huntingReason}
+## 반대 근거: ${huntingEvidence}
 
 이 비판이 타당한지 평가해주세요.`,
       }],

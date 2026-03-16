@@ -4,8 +4,8 @@ import { useSession } from "next-auth/react";
 
 const TRUST_TITLES: Record<number, string> = {
   1: "초보자",
-  2: "개척자",
-  3: "경작자",
+  2: "기여자",
+  3: "전문가",
   4: "장로",
   5: "원로",
 };
@@ -30,7 +30,7 @@ export function MyStatus() {
   return (
     <div className="mb-5">
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-sm font-semibold">👤 나의 문명</span>
+        <span className="text-sm font-semibold">👤 나의 현황</span>
       </div>
       <div className="rounded-xl border bg-card p-4">
         <div className="flex items-center justify-between mb-3">
@@ -49,7 +49,7 @@ export function MyStatus() {
             <p className="text-sm font-semibold tabular-nums">{contributionPercent}%</p>
           </div>
           <div>
-            <p className="text-[10px] text-muted-foreground mb-0.5">🌾 수확률</p>
+            <p className="text-[10px] text-muted-foreground mb-0.5">📈 수익률</p>
             <p className="text-sm font-semibold tabular-nums">{harvestROI}</p>
           </div>
           <div>

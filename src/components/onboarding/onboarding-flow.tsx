@@ -280,7 +280,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 +{bonusAmount}P 보너스 지급됨
               </div>
               <p className="text-sm text-muted-foreground">
-                {bonusAmount}P로 다른 사람의 Q&A를 경작할 수 있습니다
+                {bonusAmount}P로 다른 사람의 Q&A에 투자할 수 있습니다
               </p>
             </div>
 
@@ -310,10 +310,10 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     <span>💬</span><span>AI에게 질문하고 답변을 받을 수 있어요</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span>🌱</span><span>좋은 Q&A를 경작하면 일찍 발견한 수확을 받아요</span>
+                    <span>💰</span><span>좋은 Q&A에 투자하면 일찍 발견한 수익을 받아요</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span>🏹</span><span>AI 답변의 오류를 사냥하면 보상을 받아요</span>
+                    <span>📉</span><span>AI 답변의 오류에 반대 투자하면 보상을 받아요</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span>🙋</span><span>AI가 묻는 질문에 답하면 지식이 축적돼요</span>

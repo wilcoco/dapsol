@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/activity-feed — 실시간 활동 피드
- * 최근 활동을 시간순으로 반환 (공유, 경작, 사냥, 마일스톤)
+ * 최근 활동을 시간순으로 반환 (공유, 투자, 반대 투자, 마일스톤)
  */
 export async function GET(req: NextRequest) {
   const limit = Math.min(
@@ -83,13 +83,13 @@ function formatActivityMessage(
 
   switch (action) {
     case "share":
-      return `${userName}님이 새 영토를 개척했습니다: "${title}"`;
+      return `${userName}님이 새 Q&A를 공유했습니다: "${title}"`;
     case "invest":
-      return `${userName}님이 ${amount ?? 0}🌾 경작했습니다: "${title}"`;
+      return `${userName}님이 ${amount ?? 0}📈 투자했습니다: "${title}"`;
     case "hunt":
-      return `${userName}님이 ${amount ?? 0}🏹 사냥했습니다: "${title}"`;
+      return `${userName}님이 ${amount ?? 0}📉 반대 투자했습니다: "${title}"`;
     case "milestone":
-      return `"${title}" 영토가 마일스톤을 달성했습니다!`;
+      return `"${title}" Q&A가 마일스톤을 달성했습니다!`;
     case "burn":
       return `${amount ?? 0} 포인트가 소각되었습니다`;
     default:
