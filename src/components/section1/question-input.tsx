@@ -7,8 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Search, Loader2, TrendingUp, ExternalLink, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { QASetCardData, ScoreDetail } from "@/types/qa-set";
-import { ActivityFeed } from "@/components/section1/activity-feed";
-import { MiniMap } from "@/components/section1/mini-map";
+import { LiveActivityGraph } from "@/components/section1/live-activity-graph";
 import { MyStatus } from "@/components/section1/my-status";
 
 interface Section1Props {
@@ -336,11 +335,11 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
           {showTrending && (
             <div>
 
-              {/* ── Section 0: Mini Knowledge Map (상단 30% — 서비스 정체성) ── */}
-              <MiniMap onNavigateToMap={onNavigateToMap} />
-
-              {/* ── Section 0.5: Live Pulse (2단계 반영) ── */}
-              <ActivityFeed onSelectQASet={onSelectSharedQA} />
+              {/* ── Section 0: Live Activity Graph (노드+링크 순차 발현) ── */}
+              <LiveActivityGraph
+                onSelectQASet={onSelectSharedQA}
+                onNavigateToMap={onNavigateToMap}
+              />
 
               {/* ── Cluster Filter Chips ── */}
               {popularTags.length > 0 && (

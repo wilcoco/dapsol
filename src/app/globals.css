@@ -124,3 +124,31 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ─── Live Activity Graph Animations ─── */
+@keyframes live-graph-enter {
+  0% { opacity: 0; transform: scale(0.3); }
+  60% { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes live-graph-pulse-green {
+  0% { stroke: #22c55e; stroke-width: 2; stroke-opacity: 0.8; }
+  100% { stroke: #22c55e; stroke-width: 8; stroke-opacity: 0; }
+}
+@keyframes live-graph-pulse-red {
+  0% { stroke: #ef4444; stroke-width: 2; stroke-opacity: 0.8; }
+  100% { stroke: #ef4444; stroke-width: 8; stroke-opacity: 0; }
+}
+@keyframes live-graph-milestone {
+  0% { stroke: #eab308; stroke-width: 2; stroke-opacity: 1; }
+  50% { stroke: #eab308; stroke-width: 10; stroke-opacity: 0.5; }
+  100% { stroke: #eab308; stroke-width: 2; stroke-opacity: 0; }
+}
+@keyframes live-graph-edge-draw {
+  from { stroke-dashoffset: 200; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes live-graph-breathe {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.05; }
+}
