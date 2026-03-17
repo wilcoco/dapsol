@@ -3,24 +3,32 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { KNOWLEDGE_RELATION_COLORS } from "@/lib/constants";
 
-interface ActivityNode {
+// ─── Types ───
+
+interface GraphNode {
   id: string;
-  title: string;
-  creatorName: string;
-  totalInvested: number;
-  investorCount: number;
-  negativeCount: number;
-  lastAction: string;
-  lastActivityAt: string;
-  parentId: string | null;
-  tags: string[];
+  type: "question" | "answer" | "invest" | "hunt" | "opinion";
+  label: string;
+  sublabel?: string;
+  qaSetId: string;
+  amount?: number;
+  relationSimple?: string | null;
 }
 
-interface ActivityEdge {
+interface GraphEdge {
   source: string;
   target: string;
-  type: "fork" | "relation";
+  type: "qa" | "followup" | "invest" | "hunt" | "opinion" | "knowledge" | "fork";
+  label?: string;
   relationType?: string;
+  isAIGenerated?: boolean;
+  isUserConfirmed?: boolean;
+}
+
+interface LayoutNode extends GraphNode {
+  x: number;
+  y: number;
+  r: number;
 }
 
 interface LiveActivityGraphProps {
@@ -28,66 +36,188 @@ interface LiveActivityGraphProps {
   onNavigateToMap?: () => void;
 }
 
-interface LayoutNode extends ActivityNode {
-  x: number;
-  y: number;
-  r: number;
-  activeEffect: string | null;
-}
+// ─── Node visual config ───
 
-// ─── Spiral Layout ───
-function computeSpiralLayout(nodes: ActivityNode[], width: number, height: number): LayoutNode[] {
+const NODE_STYLES: Record<string, { fill: string; stroke: string; shape: "circle" | "diamond" | "rect"; baseR: number }> = {
+  question: { fill: "#3b82f6", stroke: "#2563eb", shape: "circle", baseR: 14 },
+  answer:   { fill: "#22c55e", stroke: "#16a34a", shape: "circle", baseR: 13 },
+  invest:   { fill: "#f59e0b", stroke: "#d97706", shape: "diamond", baseR: 8 },
+  hunt:     { fill: "#ef4444", stroke: "#dc2626", shape: "diamond", baseR: 8 },
+  opinion:  { fill: "#8b5cf6", stroke: "#7c3aed", shape: "rect", baseR: 10 },
+};
+
+// ─── Edge visual config ───
+
+const EDGE_STYLES: Record<string, { color: string; dash?: string; width: number; label: string }> = {
+  qa:        { color: "#6b7280", width: 1.5, label: "" },
+  followup:  { color: "#3b82f6", width: 1.5, dash: "4 2", label: "" },
+  invest:    { color: "#f59e0b", width: 1, dash: "2 2", label: "" },
+  hunt:      { color: "#ef4444", width: 1, dash: "2 2", label: "" },
+  opinion:   { color: "#8b5cf6", width: 1, dash: "3 2", label: "" },
+  knowledge: { color: "#94a3b8", width: 1.5, dash: "6 3", label: "" },
+  fork:      { color: "#14b8a6", width: 1.5, label: "" },
+};
+
+// ─── Layout ───
+
+function computeLayout(nodes: GraphNode[], edges: GraphEdge[], width: number, height: number): LayoutNode[] {
   if (nodes.length === 0) return [];
 
-  const sorted = [...nodes].sort((a, b) => b.totalInvested - a.totalInvested);
+  // Group by qaSetId for clustering
+  const qaGroups = new Map<string, GraphNode[]>();
+  const otherNodes: GraphNode[] = [];
+  for (const n of nodes) {
+    if (n.type === "question" || n.type === "answer") {
+      const g = qaGroups.get(n.qaSetId) || [];
+      g.push(n);
+      qaGroups.set(n.qaSetId, g);
+    } else {
+      otherNodes.push(n);
+    }
+  }
+
+  const layout: LayoutNode[] = [];
   const cx = width / 2;
   const cy = height / 2;
+  const nodePositions = new Map<string, { x: number; y: number }>();
 
-  return sorted.map((node, i) => {
-    const r = Math.min(12 + Math.sqrt(node.totalInvested) * 0.8, 40);
+  // Place QASet groups in spiral
+  let groupIdx = 0;
+  const groupCount = qaGroups.size;
 
-    let x: number, y: number;
-    if (i === 0) {
-      x = cx;
-      y = cy;
+  qaGroups.forEach((msgs, _qaSetId) => {
+    // Group center position (spiral)
+    let gx: number, gy: number;
+    if (groupCount === 1) {
+      gx = cx;
+      gy = cy;
     } else {
-      // Archimedean spiral
-      const angle = i * 0.8 + Math.PI / 4;
-      const dist = 30 + i * 14;
-      x = cx + Math.cos(angle) * dist;
-      y = cy + Math.sin(angle) * dist;
+      const angle = (groupIdx / groupCount) * Math.PI * 2 - Math.PI / 2;
+      const dist = Math.min(55 + groupIdx * 22, Math.min(width, height) * 0.38);
+      gx = cx + Math.cos(angle) * dist;
+      gy = cy + Math.sin(angle) * dist;
     }
 
-    // Clamp to viewBox bounds
-    x = Math.max(r + 5, Math.min(width - r - 5, x));
-    y = Math.max(r + 12, Math.min(height - r - 16, y));
+    // Place messages in zigzag within group
+    msgs.forEach((msg, mi) => {
+      const style = NODE_STYLES[msg.type] ?? NODE_STYLES.question;
+      const isQ = msg.type === "question";
+      const offsetX = isQ ? -18 : 18;
+      const offsetY = mi * 28 - (msgs.length - 1) * 14;
+      const x = Math.max(style.baseR + 2, Math.min(width - style.baseR - 2, gx + offsetX));
+      const y = Math.max(style.baseR + 8, Math.min(height - style.baseR - 14, gy + offsetY));
 
-    return { ...node, x, y, r, activeEffect: null };
+      const ln: LayoutNode = { ...msg, x, y, r: style.baseR };
+      layout.push(ln);
+      nodePositions.set(msg.id, { x, y });
+    });
+
+    groupIdx++;
   });
+
+  // Place invest/hunt/opinion near their linked QASet node
+  for (const n of otherNodes) {
+    const style = NODE_STYLES[n.type] ?? NODE_STYLES.opinion;
+    // Find edge connecting this node
+    const linkedEdge = edges.find((e) => e.source === n.id || e.target === n.id);
+    const linkedId = linkedEdge
+      ? (linkedEdge.source === n.id ? linkedEdge.target : linkedEdge.source)
+      : null;
+    const linkedPos = linkedId ? nodePositions.get(linkedId) : null;
+
+    let x: number, y: number;
+    if (linkedPos) {
+      // Offset from linked node
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 22 + Math.random() * 12;
+      x = linkedPos.x + Math.cos(angle) * dist;
+      y = linkedPos.y + Math.sin(angle) * dist;
+    } else {
+      x = cx + (Math.random() - 0.5) * width * 0.6;
+      y = cy + (Math.random() - 0.5) * height * 0.6;
+    }
+
+    x = Math.max(style.baseR + 2, Math.min(width - style.baseR - 2, x));
+    y = Math.max(style.baseR + 8, Math.min(height - style.baseR - 14, y));
+
+    layout.push({ ...n, x, y, r: style.baseR });
+    nodePositions.set(n.id, { x, y });
+  }
+
+  return layout;
 }
 
-// ─── Truncate ───
 function truncate(s: string, max: number) {
   return s.length > max ? s.slice(0, max) + "..." : s;
 }
 
+// ─── Node Shape Renderers ───
+
+function NodeShape({ node }: { node: LayoutNode }) {
+  const style = NODE_STYLES[node.type] ?? NODE_STYLES.question;
+
+  if (style.shape === "diamond") {
+    const r = node.r;
+    const points = `${node.x},${node.y - r} ${node.x + r},${node.y} ${node.x},${node.y + r} ${node.x - r},${node.y}`;
+    return (
+      <polygon
+        points={points}
+        fill={style.fill}
+        fillOpacity={0.25}
+        stroke={style.stroke}
+        strokeWidth={1.2}
+        strokeOpacity={0.7}
+      />
+    );
+  }
+
+  if (style.shape === "rect") {
+    return (
+      <rect
+        x={node.x - node.r}
+        y={node.y - node.r * 0.7}
+        width={node.r * 2}
+        height={node.r * 1.4}
+        rx={3}
+        fill={style.fill}
+        fillOpacity={0.25}
+        stroke={style.stroke}
+        strokeWidth={1.2}
+        strokeOpacity={0.7}
+      />
+    );
+  }
+
+  // circle (default)
+  return (
+    <circle
+      cx={node.x}
+      cy={node.y}
+      r={node.r}
+      fill={style.fill}
+      fillOpacity={0.2}
+      stroke={style.stroke}
+      strokeWidth={1.5}
+      strokeOpacity={0.6}
+    />
+  );
+}
+
+// ─── Component ───
+
 export function LiveActivityGraph({ onSelectQASet, onNavigateToMap }: LiveActivityGraphProps) {
-  const [nodes, setNodes] = useState<LayoutNode[]>([]);
-  const [edges, setEdges] = useState<ActivityEdge[]>([]);
+  const [rawNodes, setRawNodes] = useState<GraphNode[]>([]);
+  const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [loading, setLoading] = useState(true);
   const [tooltip, setTooltip] = useState<{ node: LayoutNode; x: number; y: number } | null>(null);
-  const [initialAnimDone, setInitialAnimDone] = useState(false);
-  const seenActivityIds = useRef(new Set<string>());
   const containerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Responsive viewBox
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const vw = isMobile ? 360 : 520;
-  const vh = isMobile ? 180 : 240;
-  const maxNodes = isMobile ? 20 : 30;
+  const vw = isMobile ? 380 : 600;
+  const vh = isMobile ? 200 : 300;
 
-  // ─── Initial fetch ───
+  // ─── Fetch ───
   useEffect(() => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
@@ -96,94 +226,44 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap }: LiveActivi
     fetch("/api/activity-graph", { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : { nodes: [], edges: [] }))
       .then((data) => {
-        const layoutNodes = computeSpiralLayout(
-          (data.nodes as ActivityNode[]).slice(0, maxNodes),
-          vw,
-          vh
-        );
-        setNodes(layoutNodes);
+        setRawNodes(data.nodes ?? []);
         setEdges(data.edges ?? []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
 
     return () => ctrl.abort();
-  }, [vw, vh, maxNodes]);
+  }, []);
 
-  // Mark initial animation complete
-  useEffect(() => {
-    if (nodes.length > 0 && !initialAnimDone) {
-      const timer = setTimeout(() => setInitialAnimDone(true), nodes.length * 80 + 600);
-      return () => clearTimeout(timer);
-    }
-  }, [nodes.length, initialAnimDone]);
+  // ─── Layout ───
+  const layoutNodes = useMemo(
+    () => computeLayout(rawNodes, edges, vw, vh),
+    [rawNodes, edges, vw, vh]
+  );
 
-  // ─── Polling for live events ───
-  useEffect(() => {
-    if (!initialAnimDone) return;
-
-    const poll = async () => {
-      try {
-        const res = await fetch("/api/activity-feed?limit=5");
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data?.feed) return;
-
-        for (const item of data.feed) {
-          if (seenActivityIds.current.has(item.id)) continue;
-          seenActivityIds.current.add(item.id);
-
-          if (!item.qaSetId) continue;
-
-          // Apply effect to matching node
-          setNodes((prev) =>
-            prev.map((n) =>
-              n.id === item.qaSetId
-                ? { ...n, activeEffect: item.action }
-                : n
-            )
-          );
-
-          // Clear effect after 2s
-          setTimeout(() => {
-            setNodes((prev) =>
-              prev.map((n) =>
-                n.id === item.qaSetId && n.activeEffect === item.action
-                  ? { ...n, activeEffect: null }
-                  : n
-              )
-            );
-          }, 2000);
-        }
-      } catch {}
-    };
-
-    const interval = setInterval(poll, 15000);
-    return () => clearInterval(interval);
-  }, [initialAnimDone]);
+  const nodeMap = useMemo(() => {
+    const m = new Map<string, LayoutNode>();
+    for (const n of layoutNodes) m.set(n.id, n);
+    return m;
+  }, [layoutNodes]);
 
   // ─── Tooltip ───
   const handleMouseEnter = useCallback(
     (node: LayoutNode, e: React.MouseEvent) => {
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setTooltip({
-        node,
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      });
+      setTooltip({ node, x: e.clientX - rect.left, y: e.clientY - rect.top });
     },
     []
   );
-
   const handleMouseLeave = useCallback(() => setTooltip(null), []);
 
-  // ─── Node positions map for edges ───
-  const nodeMap = useMemo(() => {
-    const m = new Map<string, LayoutNode>();
-    for (const n of nodes) m.set(n.id, n);
-    return m;
-  }, [nodes]);
+  // ─── Counts ───
+  const qaSetCount = useMemo(() => {
+    const s = new Set<string>();
+    for (const n of rawNodes) s.add(n.qaSetId);
+    return s.size;
+  }, [rawNodes]);
 
   // ─── Loading / Empty ───
   if (loading) {
@@ -192,31 +272,24 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap }: LiveActivi
         <div className="flex items-center gap-2 mb-2">
           <span className="text-sm font-semibold">🌐 지식 네트워크</span>
         </div>
-        <div className="h-[200px] rounded-xl bg-muted/30 animate-pulse" />
+        <div className="rounded-xl bg-muted/30 animate-pulse" style={{ height: isMobile ? 200 : 280 }} />
       </div>
     );
   }
 
-  if (nodes.length === 0) {
+  if (layoutNodes.length === 0) {
     return (
       <div className="mb-5">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-semibold">🌐 지식 네트워크</span>
         </div>
         <div className="rounded-xl border bg-card/50 overflow-hidden">
-          <svg viewBox={`0 0 ${vw} ${vh}`} className="w-full h-auto" style={{ maxHeight: "200px" }}>
-            {/* Pulsing center dot */}
+          <svg viewBox={`0 0 ${vw} ${vh}`} className="w-full h-auto" style={{ maxHeight: 200 }}>
             <circle cx={vw / 2} cy={vh / 2} r={8} fill="#3b82f6" fillOpacity={0.3}>
               <animate attributeName="r" values="8;14;8" dur="2s" repeatCount="indefinite" />
               <animate attributeName="fillOpacity" values="0.3;0.1;0.3" dur="2s" repeatCount="indefinite" />
             </circle>
-            <text
-              x={vw / 2}
-              y={vh / 2 + 28}
-              textAnchor="middle"
-              className="fill-muted-foreground"
-              style={{ fontSize: "11px" }}
-            >
+            <text x={vw / 2} y={vh / 2 + 28} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: "11px" }}>
               공유된 Q&A가 생기면 지식 네트워크가 시작됩니다
             </text>
           </svg>
@@ -227,28 +300,43 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap }: LiveActivi
 
   return (
     <div className="mb-5" ref={containerRef}>
+      {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold">🌐 지식 네트워크</span>
           <span className="text-xs text-muted-foreground">
-            {nodes.length}개 Q&A 활동 중
+            {qaSetCount}개 Q&A · {layoutNodes.length}개 노드
           </span>
         </div>
         {onNavigateToMap && (
-          <button
-            onClick={onNavigateToMap}
-            className="text-xs text-primary hover:underline"
-          >
+          <button onClick={onNavigateToMap} className="text-xs text-primary hover:underline">
             전체 지도 →
           </button>
         )}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-3 mb-1.5 text-[10px] text-muted-foreground flex-wrap">
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" /> 질문</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" /> 답변</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rotate-45 bg-amber-500 inline-block" style={{ borderRadius: 1 }} /> 투자</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rotate-45 bg-red-500 inline-block" style={{ borderRadius: 1 }} /> 반대</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-purple-500 inline-block" /> 의견</span>
+        <span className="flex items-center gap-1">
+          <svg width="14" height="6"><line x1="0" y1="3" x2="14" y2="3" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4 2" /></svg>
+          AI 제안
+        </span>
+        <span className="flex items-center gap-1">
+          <svg width="14" height="6"><line x1="0" y1="3" x2="14" y2="3" stroke="#94a3b8" strokeWidth="2" /></svg>
+          확정됨
+        </span>
       </div>
 
       <div className="relative rounded-xl border bg-card/50 overflow-hidden">
         <svg
           viewBox={`0 0 ${vw} ${vh}`}
           className="w-full h-auto"
-          style={{ maxHeight: isMobile ? "180px" : "240px" }}
+          style={{ maxHeight: isMobile ? 200 : 300 }}
         >
           {/* ── Edges ── */}
           {edges.map((edge, i) => {
@@ -256,158 +344,167 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap }: LiveActivi
             const tgt = nodeMap.get(edge.target);
             if (!src || !tgt) return null;
 
-            const color =
-              edge.type === "fork"
-                ? "#14b8a6"
-                : KNOWLEDGE_RELATION_COLORS[edge.relationType ?? ""] ?? "#94a3b8";
-            const isDashed = edge.type === "relation";
+            const es = EDGE_STYLES[edge.type] ?? EDGE_STYLES.qa;
+
+            // Knowledge edges use relation-specific colors
+            let color = es.color;
+            if (edge.type === "knowledge" && edge.relationType) {
+              color = KNOWLEDGE_RELATION_COLORS[edge.relationType] ?? es.color;
+            }
+
+            // AI-generated but not confirmed = thinner dashed
+            // User confirmed = solid thicker
+            let dash = es.dash;
+            let width = es.width;
+            if (edge.type === "knowledge") {
+              if (edge.isUserConfirmed) {
+                dash = undefined; // solid = confirmed
+                width = 2;
+              } else if (edge.isAIGenerated) {
+                dash = "4 2"; // dashed = AI suggestion
+                width = 1;
+              }
+            }
+
+            const midX = (src.x + tgt.x) / 2;
+            const midY = (src.y + tgt.y) / 2;
 
             return (
-              <line
-                key={`edge-${i}`}
-                x1={src.x}
-                y1={src.y}
-                x2={tgt.x}
-                y2={tgt.y}
-                stroke={color}
-                strokeWidth={1.5}
-                strokeOpacity={0.5}
-                strokeDasharray={isDashed ? "6 3" : undefined}
-                style={{
-                  strokeDashoffset: 200,
-                  animation: `live-graph-edge-draw 0.6s ease-out ${i * 60 + nodes.length * 80}ms forwards`,
-                }}
-              />
-            );
-          })}
-
-          {/* ── Nodes ── */}
-          {nodes.map((node, i) => {
-            const effectAnim =
-              node.activeEffect === "invest"
-                ? "live-graph-pulse-green 1s ease-out"
-                : node.activeEffect === "hunt"
-                  ? "live-graph-pulse-red 0.8s ease-out"
-                  : node.activeEffect === "milestone"
-                    ? "live-graph-milestone 1.2s ease-out"
-                    : undefined;
-
-            const fillColor =
-              node.negativeCount > node.investorCount
-                ? "#ef4444"
-                : node.totalInvested >= 100
-                  ? "#22c55e"
-                  : node.totalInvested >= 30
-                    ? "#3b82f6"
-                    : "#94a3b8";
-
-            return (
-              <g
-                key={node.id}
-                style={{
-                  opacity: 0,
-                  transformOrigin: `${node.x}px ${node.y}px`,
-                  animation: `live-graph-enter 0.5s ease-out ${i * 80}ms forwards`,
-                  cursor: "pointer",
-                }}
-                onClick={() => onSelectQASet(node.id)}
-                onMouseEnter={(e) => handleMouseEnter(node, e)}
-                onMouseLeave={handleMouseLeave}
-              >
-                {/* Breathing glow for active nodes */}
-                {node.totalInvested >= 30 && (
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={node.r + 4}
-                    fill={fillColor}
-                    style={{ animation: "live-graph-breathe 3s ease-in-out infinite" }}
-                  />
-                )}
-
-                {/* Live event pulse ring */}
-                {effectAnim && (
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={node.r}
-                    fill="none"
-                    style={{ animation: effectAnim }}
-                  />
-                )}
-
-                {/* Main circle */}
-                <circle
-                  cx={node.x}
-                  cy={node.y}
-                  r={node.r}
-                  fill={fillColor}
-                  fillOpacity={0.2}
-                  stroke={fillColor}
-                  strokeWidth={1.5}
-                  strokeOpacity={0.6}
+              <g key={`edge-${i}`}>
+                <line
+                  x1={src.x} y1={src.y} x2={tgt.x} y2={tgt.y}
+                  stroke={color}
+                  strokeWidth={width}
+                  strokeOpacity={0.5}
+                  strokeDasharray={dash}
+                  style={{
+                    strokeDashoffset: dash ? 200 : 0,
+                    animation: dash ? `live-graph-edge-draw 0.6s ease-out ${i * 40 + layoutNodes.length * 60}ms forwards` : undefined,
+                  }}
                 />
-
-                {/* Investor count inside */}
-                {node.investorCount > 0 && (
-                  <text
-                    x={node.x}
-                    y={node.y + 1}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    className="fill-foreground font-medium"
-                    style={{ fontSize: node.r > 25 ? "10px" : "8px" }}
-                  >
-                    {node.investorCount}명
-                  </text>
-                )}
-
-                {/* Title below node */}
-                {!isMobile && (
-                  <text
-                    x={node.x}
-                    y={node.y + node.r + 11}
-                    textAnchor="middle"
-                    className="fill-muted-foreground"
-                    style={{ fontSize: "8px" }}
-                  >
-                    {truncate(node.title, 8)}
-                  </text>
+                {/* Edge label for knowledge/followup/opinion */}
+                {edge.label && (edge.type === "knowledge" || edge.type === "followup" || edge.type === "opinion") && (
+                  <g>
+                    <rect
+                      x={midX - 16} y={midY - 6}
+                      width={32} height={12} rx={3}
+                      fill="var(--background, white)"
+                      fillOpacity={0.85}
+                      stroke={color}
+                      strokeWidth={0.5}
+                      strokeOpacity={0.4}
+                    />
+                    <text
+                      x={midX} y={midY + 2.5}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fill={color}
+                      style={{ fontSize: "7px", fontWeight: 500 }}
+                    >
+                      {truncate(edge.label, 4)}
+                      {edge.type === "knowledge" && edge.isAIGenerated && !edge.isUserConfirmed && " ?"}
+                    </text>
+                  </g>
                 )}
               </g>
             );
           })}
+
+          {/* ── Nodes ── */}
+          {layoutNodes.map((node, i) => (
+            <g
+              key={node.id}
+              style={{
+                opacity: 0,
+                transformOrigin: `${node.x}px ${node.y}px`,
+                animation: `live-graph-enter 0.5s ease-out ${i * 60}ms forwards`,
+                cursor: "pointer",
+              }}
+              onClick={() => onSelectQASet(node.qaSetId)}
+              onMouseEnter={(e) => handleMouseEnter(node, e)}
+              onMouseLeave={handleMouseLeave}
+            >
+              <NodeShape node={node} />
+
+              {/* Inner label */}
+              {(node.type === "question" || node.type === "answer") && (
+                <text
+                  x={node.x} y={node.y + 1}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  className="fill-foreground font-semibold"
+                  style={{ fontSize: "9px" }}
+                >
+                  {node.type === "question" ? "Q" : "A"}
+                </text>
+              )}
+              {(node.type === "invest" || node.type === "hunt") && node.amount && (
+                <text
+                  x={node.x} y={node.y + 1}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  className="fill-foreground"
+                  style={{ fontSize: "6px", fontWeight: 600 }}
+                >
+                  {node.amount}
+                </text>
+              )}
+              {node.type === "opinion" && (
+                <text
+                  x={node.x} y={node.y + 1}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  className="fill-foreground"
+                  style={{ fontSize: "7px", fontWeight: 600 }}
+                >
+                  ✍
+                </text>
+              )}
+
+              {/* Sub-label below (desktop only, Q/A nodes) */}
+              {!isMobile && (node.type === "question" || node.type === "answer") && (
+                <text
+                  x={node.x} y={node.y + node.r + 9}
+                  textAnchor="middle"
+                  className="fill-muted-foreground"
+                  style={{ fontSize: "7px" }}
+                >
+                  {truncate(node.label, 6)}
+                </text>
+              )}
+            </g>
+          ))}
         </svg>
 
-        {/* ── Tooltip (HTML, outside SVG) ── */}
+        {/* ── Tooltip ── */}
         {tooltip && (
           <div
-            className="absolute z-20 pointer-events-none bg-popover text-popover-foreground border rounded-lg shadow-lg px-3 py-2 text-xs max-w-[200px]"
+            className="absolute z-20 pointer-events-none bg-popover text-popover-foreground border rounded-lg shadow-lg px-3 py-2 text-xs max-w-[220px]"
             style={{
-              left: Math.min(tooltip.x + 12, (containerRef.current?.clientWidth ?? 300) - 210),
-              top: tooltip.y - 10,
+              left: Math.min(tooltip.x + 12, (containerRef.current?.clientWidth ?? 300) - 230),
+              top: Math.max(tooltip.y - 60, 4),
             }}
           >
-            <div className="font-medium text-sm mb-1">{tooltip.node.title}</div>
-            <div className="text-muted-foreground mb-1">by {tooltip.node.creatorName}</div>
-            <div className="flex items-center gap-2">
-              {tooltip.node.investorCount > 0 && (
-                <span className="text-green-600">
-                  💰 {tooltip.node.totalInvested}P · {tooltip.node.investorCount}명
-                </span>
-              )}
-              {tooltip.node.negativeCount > 0 && (
-                <span className="text-red-500">
-                  📉 {tooltip.node.negativeCount}명
-                </span>
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                tooltip.node.type === "question" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" :
+                tooltip.node.type === "answer" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
+                tooltip.node.type === "invest" ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300" :
+                tooltip.node.type === "hunt" ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" :
+                "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
+              }`}>
+                {tooltip.node.type === "question" ? "질문" :
+                 tooltip.node.type === "answer" ? "답변" :
+                 tooltip.node.type === "invest" ? "투자" :
+                 tooltip.node.type === "hunt" ? "반대투자" : "의견"}
+              </span>
+              {tooltip.node.sublabel && (
+                <span className="text-muted-foreground">{tooltip.node.sublabel}</span>
               )}
             </div>
-            {tooltip.node.tags.length > 0 && (
-              <div className="mt-1 flex gap-1 flex-wrap">
-                {tooltip.node.tags.map((t) => (
-                  <span key={t} className="bg-muted px-1.5 py-0.5 rounded text-[10px]">{t}</span>
-                ))}
-              </div>
+            <div className="text-sm leading-snug">{tooltip.node.label}</div>
+            {tooltip.node.relationSimple && (
+              <div className="mt-1 text-[10px] text-primary">관계: {tooltip.node.relationSimple}</div>
             )}
             <div className="mt-1 text-[10px] text-muted-foreground">클릭하여 열기</div>
           </div>
