@@ -218,6 +218,7 @@ function layoutExploreNodes(nodes: ExploreNode[], viewW: number, viewH: number):
 
 interface NavigableKnowledgeMapProps {
   initialFocusId?: string | null;
+  initialClusterFocusId?: string | null;
   onSelectQASet: (qaSetId: string) => void;
   isActive: boolean;
 }
@@ -228,6 +229,7 @@ interface NavigableKnowledgeMapProps {
 
 export function NavigableKnowledgeMap({
   initialFocusId,
+  initialClusterFocusId,
   onSelectQASet,
   isActive,
 }: NavigableKnowledgeMapProps) {
@@ -283,6 +285,14 @@ export function NavigableKnowledgeMap({
       setZoomLevel("qaset");
     }
   }, [initialFocusId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Navigate to a specific cluster when passed from home screen
+  useEffect(() => {
+    if (initialClusterFocusId && isActive) {
+      setZoomLevel("cluster");
+      setFocalClusterId(initialClusterFocusId);
+    }
+  }, [initialClusterFocusId, isActive]);
 
   // ══════════════════════════════════════════════
   // Fetch: Cluster level (focal + neighbors)

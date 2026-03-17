@@ -21,6 +21,8 @@ export async function GET() {
         title: true,
         parentQASetId: true,
         creatorId: true,
+        topicClusterId: true,
+        topicCluster: { select: { id: true, name: true } },
         creator: { select: { id: true, name: true } },
         messages: {
           orderBy: { orderIndex: "asc" },
@@ -93,6 +95,8 @@ export async function GET() {
       qaSetId: string;
       amount?: number;
       relationSimple?: string | null;
+      clusterId?: string | null;
+      clusterName?: string | null;
     };
     type GEdge = {
       source: string;
@@ -134,6 +138,8 @@ export async function GET() {
           sublabel: isQ ? undefined : qs.creator?.name ?? undefined,
           qaSetId: qs.id,
           relationSimple: msg.relationSimple,
+          clusterId: qs.topicClusterId,
+          clusterName: qs.topicCluster?.name ?? null,
         });
 
         if (msg.orderIndex === 0) {
@@ -242,9 +248,34 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ nodes, edges });
+    // ─── Clusters ───
+    const CLUSTER_COLORS = [
+      "#f43f5e", "#06b6d4", "#a78bfa", "#fb923c",
+      "#34d399", "#38bdf8", "#d4a574", "#c084fc",
+    ];
+    const clusterMap = new Map<string, { id: string; name: string; nodeIds: string[] }>();
+    for (const n of nodes) {
+      if (n.clusterId) {
+        const existing = clusterMap.get(n.clusterId);
+        if (existing) {
+          existing.nodeIds.push(n.id);
+        } else {
+          clusterMap.set(n.clusterId, {
+            id: n.clusterId,
+            name: n.clusterName ?? "기타",
+            nodeIds: [n.id],
+          });
+        }
+      }
+    }
+    const clusters = Array.from(clusterMap.values()).map((c, i) => ({
+      ...c,
+      color: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
+    }));
+
+    return NextResponse.json({ nodes, edges, clusters });
   } catch (err) {
     console.error("Activity graph error:", err);
-    return NextResponse.json({ nodes: [], edges: [] });
+    return NextResponse.json({ nodes: [], edges: [], clusters: [] });
   }
 }

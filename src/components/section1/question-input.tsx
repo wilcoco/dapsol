@@ -15,6 +15,7 @@ interface Section1Props {
   onSelectSharedQA: (qaSetId: string) => void;
   onAnswerGap?: (gapId: string, description: string) => void;
   onNavigateToMap?: () => void;
+  onNavigateToCluster?: (clusterId: string) => void;
 }
 
 interface SearchState {
@@ -41,7 +42,7 @@ interface TagItem {
   count: number;
 }
 
-export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswerGap, onNavigateToMap }: Section1Props) {
+export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswerGap, onNavigateToMap, onNavigateToCluster }: Section1Props) {
   const { data: session } = useSession();
   const [question, setQuestion] = useState("");
   const [trendingQAs, setTrendingQAs] = useState<QASetCardData[]>([]);
@@ -339,6 +340,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
               <LiveActivityGraph
                 onSelectQASet={onSelectSharedQA}
                 onNavigateToMap={onNavigateToMap}
+                onNavigateToCluster={onNavigateToCluster}
               />
 
               {/* ── Cluster Filter Chips ── */}

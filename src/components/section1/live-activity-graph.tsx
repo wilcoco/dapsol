@@ -13,6 +13,8 @@ interface GraphNode {
   qaSetId: string;
   amount?: number;
   relationSimple?: string | null;
+  clusterId?: string | null;
+  clusterName?: string | null;
 }
 
 interface GraphEdge {
@@ -25,16 +27,34 @@ interface GraphEdge {
   isUserConfirmed?: boolean;
 }
 
+interface ClusterInfo {
+  id: string;
+  name: string;
+  color: string;
+  nodeIds: string[];
+}
+
 interface LayoutNode extends GraphNode {
   x: number;
   y: number;
-  w: number;  // width (rect) or diameter (circle)
-  h: number;  // height (rect) or diameter (circle)
+  w: number;
+  h: number;
+}
+
+interface ClusterHalo {
+  id: string;
+  name: string;
+  color: string;
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
 }
 
 interface LiveActivityGraphProps {
   onSelectQASet: (qaSetId: string) => void;
   onNavigateToMap?: () => void;
+  onNavigateToCluster?: (clusterId: string) => void;
 }
 
 // ─── Node dimensions ───
@@ -65,10 +85,19 @@ const EDGE_STYLES: Record<string, { color: string; dash?: string; width: number 
   author:    { color: "#6366f1", width: 0.8, dash: "2 2" },
 };
 
-// ─── Layout ───
+// ─── Radial Layout ───
 
-function computeLayout(nodes: GraphNode[], edges: GraphEdge[], width: number, height: number): LayoutNode[] {
-  if (nodes.length === 0) return [];
+function computeRadialLayout(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  clusters: ClusterInfo[],
+  width: number,
+  height: number,
+): { layout: LayoutNode[]; halos: ClusterHalo[] } {
+  if (nodes.length === 0) return { layout: [], halos: [] };
+
+  const cx = width / 2;
+  const cy = height / 2;
 
   // Group Q/A messages by qaSetId
   const qaGroups = new Map<string, GraphNode[]>();
@@ -83,29 +112,134 @@ function computeLayout(nodes: GraphNode[], edges: GraphEdge[], width: number, he
     }
   }
 
+  // Group QASets by cluster
+  const clusterIdMap = new Map<string, string>(); // qaSetId → clusterId
+  for (const n of nodes) {
+    if (n.clusterId && !clusterIdMap.has(n.qaSetId)) {
+      clusterIdMap.set(n.qaSetId, n.clusterId);
+    }
+  }
+
+  // Build cluster groups: clusterId → qaSetId[]
+  const clusterGroups = new Map<string, string[]>();
+  const unclusteredSets: string[] = [];
+  for (const qaSetId of qaGroups.keys()) {
+    const cid = clusterIdMap.get(qaSetId);
+    if (cid) {
+      const g = clusterGroups.get(cid) || [];
+      g.push(qaSetId);
+      clusterGroups.set(cid, g);
+    } else {
+      unclusteredSets.push(qaSetId);
+    }
+  }
+
+  // Find hub: QASet with most nodes (proxy for activity)
+  let hubQASetId = "";
+  let maxMsgs = 0;
+  for (const [qsId, msgs] of qaGroups) {
+    if (msgs.length > maxMsgs) {
+      maxMsgs = msgs.length;
+      hubQASetId = qsId;
+    }
+  }
+
+  // Assign angular sectors to clusters
+  const totalSets = qaGroups.size;
+  const MIN_ANGLE = (40 * Math.PI) / 180; // 40 degrees min per cluster
+  const allClusterIds = [...clusterGroups.keys()];
+  if (unclusteredSets.length > 0) allClusterIds.push("__unclustered__");
+
+  const sectorAngles: { id: string; startAngle: number; endAngle: number; qaSetIds: string[] }[] = [];
+  if (allClusterIds.length === 0) {
+    // No clusters at all, place everything in a full circle
+    sectorAngles.push({ id: "__all__", startAngle: 0, endAngle: Math.PI * 2, qaSetIds: [...qaGroups.keys()] });
+  } else {
+    const totalAngle = Math.PI * 2;
+    let remainingAngle = totalAngle;
+    const clusterSizes: { id: string; count: number; qaSetIds: string[] }[] = [];
+    for (const cid of allClusterIds) {
+      const qaSetIds = cid === "__unclustered__" ? unclusteredSets : (clusterGroups.get(cid) ?? []);
+      clusterSizes.push({ id: cid, count: qaSetIds.length, qaSetIds });
+    }
+    // Calculate proportional angles with minimum
+    const totalCount = clusterSizes.reduce((s, c) => s + c.count, 0);
+    let currentAngle = -Math.PI / 2; // start from top
+    for (const cs of clusterSizes) {
+      const proportion = cs.count / Math.max(totalCount, 1);
+      let angle = Math.max(MIN_ANGLE, proportion * totalAngle);
+      if (currentAngle + angle > Math.PI * 2 - Math.PI / 2) {
+        angle = Math.PI * 2 - Math.PI / 2 - currentAngle + Math.PI * 2; // wrap
+      }
+      sectorAngles.push({
+        id: cs.id,
+        startAngle: currentAngle,
+        endAngle: currentAngle + angle,
+        qaSetIds: cs.qaSetIds,
+      });
+      currentAngle += angle;
+    }
+    // Normalize to fill exactly 2π
+    if (sectorAngles.length > 0) {
+      const total = sectorAngles.reduce((s, sa) => s + (sa.endAngle - sa.startAngle), 0);
+      const scale = totalAngle / total;
+      let accum = -Math.PI / 2;
+      for (const sa of sectorAngles) {
+        const size = (sa.endAngle - sa.startAngle) * scale;
+        sa.startAngle = accum;
+        sa.endAngle = accum + size;
+        accum += size;
+      }
+    }
+  }
+
   const layout: LayoutNode[] = [];
   const nodePositions = new Map<string, { x: number; y: number }>();
-  const groupCount = qaGroups.size;
 
-  // Place QASet groups — horizontal columns
-  let colIdx = 0;
-  const colWidth = Math.max(180, width / Math.max(groupCount, 1));
+  // Radii for concentric rings
+  const baseRadius = Math.min(width, height) * 0.16;
+  const ring1 = baseRadius;
+  const ring2 = baseRadius * 1.8;
+  const ring3 = baseRadius * 2.5;
 
-  qaGroups.forEach((msgs) => {
-    const colCx = colWidth * colIdx + colWidth / 2;
+  // Place QASet groups within their cluster sectors
+  for (const sector of sectorAngles) {
+    const setCount = sector.qaSetIds.length;
+    if (setCount === 0) continue;
 
-    msgs.forEach((msg, mi) => {
-      const cfg = NODE_CONFIG[msg.type] ?? NODE_CONFIG.question;
-      const x = Math.max(cfg.w / 2 + 4, Math.min(width - cfg.w / 2 - 4, colCx));
-      const y = 40 + mi * 34;
-      layout.push({ ...msg, x, y, w: cfg.w, h: cfg.h });
-      nodePositions.set(msg.id, { x, y });
-    });
+    const sectorMid = (sector.startAngle + sector.endAngle) / 2;
+    const sectorSpan = sector.endAngle - sector.startAngle;
 
-    colIdx++;
-  });
+    for (let si = 0; si < setCount; si++) {
+      const qaSetId = sector.qaSetIds[si];
+      const msgs = qaGroups.get(qaSetId) ?? [];
 
-  // Place other nodes (invest, hunt, opinion, author) near linked nodes
+      // Angle within sector
+      const angleOffset = setCount === 1
+        ? 0
+        : ((si / (setCount - 1)) - 0.5) * sectorSpan * 0.7;
+      const angle = sectorMid + angleOffset;
+
+      // Ring: hub at ring1, others at ring2/ring3
+      const isHub = qaSetId === hubQASetId;
+      const ring = isHub ? ring1 : (si < Math.ceil(setCount / 2) ? ring2 : ring3);
+
+      // Base position for this QASet
+      const groupX = cx + Math.cos(angle) * ring;
+      const groupY = cy + Math.sin(angle) * ring;
+
+      // Place messages as vertical chain
+      msgs.forEach((msg, mi) => {
+        const cfg = NODE_CONFIG[msg.type] ?? NODE_CONFIG.question;
+        const x = clamp(groupX, cfg.w / 2 + 4, width - cfg.w / 2 - 4);
+        const y = clamp(groupY + mi * 32 - ((msgs.length - 1) * 16), cfg.h / 2 + 4, height - cfg.h / 2 - 4);
+        layout.push({ ...msg, x, y, w: cfg.w, h: cfg.h });
+        nodePositions.set(msg.id, { x, y });
+      });
+    }
+  }
+
+  // Place satellite nodes (invest, hunt, opinion, author) near their linked nodes
   let otherIdx = 0;
   for (const n of otherNodes) {
     const cfg = NODE_CONFIG[n.type] ?? NODE_CONFIG.invest;
@@ -117,25 +251,89 @@ function computeLayout(nodes: GraphNode[], edges: GraphEdge[], width: number, he
 
     let x: number, y: number;
     if (linkedPos) {
-      // Place to the right/left of linked node
-      const side = n.type === "author" ? -1 : 1;
-      const yOff = n.type === "author" ? 0 : (otherIdx % 3 - 1) * 22;
-      x = linkedPos.x + side * 90;
-      y = linkedPos.y + yOff;
+      // Push outward from center
+      const dx = linkedPos.x - cx;
+      const dy = linkedPos.y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const pushDist = n.type === "author" ? -40 : 50;
+      const ySpread = (otherIdx % 3 - 1) * 18;
+      x = linkedPos.x + (dx / dist) * pushDist;
+      y = linkedPos.y + (dy / dist) * pushDist + ySpread;
     } else {
-      x = width / 2 + (otherIdx - otherNodes.length / 2) * 30;
-      y = height - 30;
+      const angle = (otherIdx / Math.max(otherNodes.length, 1)) * Math.PI * 2;
+      x = cx + Math.cos(angle) * ring3;
+      y = cy + Math.sin(angle) * ring3;
     }
 
-    x = Math.max(cfg.w / 2 + 4, Math.min(width - cfg.w / 2 - 4, x));
-    y = Math.max(cfg.h / 2 + 4, Math.min(height - cfg.h / 2 - 4, y));
+    x = clamp(x, cfg.w / 2 + 4, width - cfg.w / 2 - 4);
+    y = clamp(y, cfg.h / 2 + 4, height - cfg.h / 2 - 4);
 
     layout.push({ ...n, x, y, w: cfg.w, h: cfg.h });
     nodePositions.set(n.id, { x, y });
     otherIdx++;
   }
 
-  return layout;
+  // Build cluster halos
+  const halos: ClusterHalo[] = [];
+  const clusterInfoMap = new Map<string, ClusterInfo>();
+  for (const c of clusters) clusterInfoMap.set(c.id, c);
+
+  for (const sector of sectorAngles) {
+    if (sector.id === "__all__" || sector.id === "__unclustered__") {
+      // Build unclustered halo
+      const unclusteredPositions: { x: number; y: number }[] = [];
+      for (const qsId of sector.qaSetIds) {
+        const msgs = qaGroups.get(qsId) ?? [];
+        for (const msg of msgs) {
+          const pos = nodePositions.get(msg.id);
+          if (pos) unclusteredPositions.push(pos);
+        }
+      }
+      if (unclusteredPositions.length > 0 && sector.id === "__unclustered__") {
+        const halo = computeHalo(unclusteredPositions, "__unclustered__", "기타", "#9ca3af");
+        halos.push(halo);
+      }
+      continue;
+    }
+
+    const info = clusterInfoMap.get(sector.id);
+    if (!info) continue;
+
+    const positions: { x: number; y: number }[] = [];
+    for (const qsId of sector.qaSetIds) {
+      const msgs = qaGroups.get(qsId) ?? [];
+      for (const msg of msgs) {
+        const pos = nodePositions.get(msg.id);
+        if (pos) positions.push(pos);
+      }
+    }
+    if (positions.length > 0) {
+      halos.push(computeHalo(positions, info.id, info.name, info.color));
+    }
+  }
+
+  return { layout, halos };
+}
+
+function computeHalo(
+  positions: { x: number; y: number }[],
+  id: string, name: string, color: string,
+): ClusterHalo {
+  const xs = positions.map(p => p.x);
+  const ys = positions.map(p => p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const haloCx = (minX + maxX) / 2;
+  const haloCy = (minY + maxY) / 2;
+  const haloRx = Math.max((maxX - minX) / 2 + 40, 50);
+  const haloRy = Math.max((maxY - minY) / 2 + 30, 40);
+  return { id, name, color, cx: haloCx, cy: haloCy, rx: haloRx, ry: haloRy };
+}
+
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
 }
 
 function truncate(s: string, max: number) {
@@ -144,9 +342,10 @@ function truncate(s: string, max: number) {
 
 // ─── Component ───
 
-export function LiveActivityGraph({ onSelectQASet, onNavigateToMap }: LiveActivityGraphProps) {
+export function LiveActivityGraph({ onSelectQASet, onNavigateToMap, onNavigateToCluster }: LiveActivityGraphProps) {
   const [rawNodes, setRawNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
+  const [clusters, setClusters] = useState<ClusterInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [tooltip, setTooltip] = useState<{ node: LayoutNode; x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -154,7 +353,7 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap }: LiveActivi
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const vw = isMobile ? 400 : 800;
-  const vh = isMobile ? 240 : 360;
+  const vh = isMobile ? 300 : 420;
 
   useEffect(() => {
     abortRef.current?.abort();
@@ -162,10 +361,11 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap }: LiveActivi
     abortRef.current = ctrl;
 
     fetch("/api/activity-graph", { signal: ctrl.signal })
-      .then((r) => (r.ok ? r.json() : { nodes: [], edges: [] }))
+      .then((r) => (r.ok ? r.json() : { nodes: [], edges: [], clusters: [] }))
       .then((data) => {
         setRawNodes(data.nodes ?? []);
         setEdges(data.edges ?? []);
+        setClusters(data.clusters ?? []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -173,10 +373,10 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap }: LiveActivi
     return () => ctrl.abort();
   }, []);
 
-  const layoutNodes = useMemo(
-    () => computeLayout(rawNodes, edges, vw, vh),
-    [rawNodes, edges, vw, vh]
-  );
+  const { layoutNodes, halos } = useMemo(() => {
+    const result = computeRadialLayout(rawNodes, edges, clusters, vw, vh);
+    return { layoutNodes: result.layout, halos: result.halos };
+  }, [rawNodes, edges, clusters, vw, vh]);
 
   const nodeMap = useMemo(() => {
     const m = new Map<string, LayoutNode>();
@@ -245,7 +445,7 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap }: LiveActivi
         </div>
         {onNavigateToMap && (
           <button onClick={onNavigateToMap} className="text-xs text-primary hover:underline">
-            전체 지도 →
+            지식 지도에서 탐색 →
           </button>
         )}
       </div>
@@ -278,14 +478,54 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap }: LiveActivi
           <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="#94a3b8" strokeWidth="2" /></svg>
           확정
         </span>
+        {/* Cluster legend */}
+        {clusters.map((c) => (
+          <span key={c.id} className="flex items-center gap-1">
+            <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.color, opacity: 0.5 }} />
+            {c.name}
+          </span>
+        ))}
       </div>
 
       <div className="relative rounded-xl border bg-card/50 overflow-hidden">
         <svg
           viewBox={`0 0 ${vw} ${vh}`}
           className="w-full h-auto"
-          style={{ maxHeight: isMobile ? 240 : 360 }}
+          style={{ maxHeight: isMobile ? 300 : 420 }}
         >
+          {/* ── Cluster Halos ── */}
+          {halos.map((halo, i) => (
+            <g
+              key={`halo-${halo.id}`}
+              style={{
+                animation: `cluster-halo-appear 0.6s ease-out ${i * 100}ms both`,
+                cursor: halo.id !== "__unclustered__" ? "pointer" : "default",
+              }}
+              onClick={() => {
+                if (halo.id !== "__unclustered__" && onNavigateToCluster) {
+                  onNavigateToCluster(halo.id);
+                }
+              }}
+            >
+              <ellipse
+                cx={halo.cx} cy={halo.cy}
+                rx={halo.rx} ry={halo.ry}
+                fill={halo.color} fillOpacity={0.06}
+                stroke={halo.color} strokeWidth={1} strokeOpacity={0.18}
+                strokeDasharray={halo.id === "__unclustered__" ? "4 3" : undefined}
+              />
+              <text
+                x={halo.cx} y={halo.cy - halo.ry + 12}
+                textAnchor="middle"
+                fill={halo.color} fillOpacity={0.6}
+                style={{ fontSize: "9px", fontWeight: 600 }}
+              >
+                {halo.name}
+                {halo.id !== "__unclustered__" ? " ↗" : ""}
+              </text>
+            </g>
+          ))}
+
           {/* ── Edges ── */}
           {edges.map((edge, i) => {
             const src = nodeMap.get(edge.source);
@@ -487,6 +727,9 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap }: LiveActivi
               )}
             </div>
             <div className="text-sm leading-snug">{tooltip.node.label}</div>
+            {tooltip.node.clusterName && (
+              <div className="mt-1 text-[10px] text-muted-foreground">주제: {tooltip.node.clusterName}</div>
+            )}
             {tooltip.node.relationSimple && (
               <div className="mt-1 text-[10px] text-primary">관계: {tooltip.node.relationSimple}</div>
             )}

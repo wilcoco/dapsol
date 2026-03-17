@@ -20,6 +20,7 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("territory");
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [humanAnswerMode, setHumanAnswerMode] = useState(false);
+  const [clusterFocusId, setClusterFocusId] = useState<string | null>(null);
 
   // URL parameter support
   useEffect(() => {
@@ -215,6 +216,10 @@ export default function HomePage() {
                 onSelectSharedQA={handleSelectSharedQA}
                 onAnswerGap={handleAnswerGap}
                 onNavigateToMap={() => setActiveTab("map")}
+                onNavigateToCluster={(clusterId) => {
+                  setClusterFocusId(clusterId);
+                  setActiveTab("map");
+                }}
               />
             </div>
             {activeQASet && (
@@ -246,6 +251,7 @@ export default function HomePage() {
         <div className={activeTab === "map" ? "block h-full" : "hidden"}>
           <NavigableKnowledgeMap
             initialFocusId={activeQASet?.id}
+            initialClusterFocusId={clusterFocusId}
             onSelectQASet={handleSelectSharedQA}
             isActive={activeTab === "map"}
           />
