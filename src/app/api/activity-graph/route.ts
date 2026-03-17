@@ -6,25 +6,25 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/activity-graph
  *
- * 홈 화면 지식 네트워크 그래프용.
- * 최근 공유 QASet의 메시지(Q/A), 투자, 의견을 모두 노드로 반환.
- * 링크: Q→A, 후속질문, 투자, 의견연결, 지식관계(AI제안/확정 구분).
+ * 홈 화면 지식 네트워크용.
+ * 노드: 질문(rect), 답변(rect), 투자(circle), 반대투자(circle), 의견(rect), 작성자(circle)
+ * 링크: Q→A, 후속질문, 투자, 의견, 지식관계(AI제안/확정), 포크, 작성자→QA
  */
 export async function GET() {
   try {
-    // 1. 최근 공유된 QASet (최대 15개 — 각 QASet에서 메시지+투자+의견 노드 파생)
     const qaSets = await prisma.qASet.findMany({
       where: { isShared: true },
       orderBy: { sharedAt: "desc" },
-      take: 15,
+      take: 10,
       select: {
         id: true,
         title: true,
         parentQASetId: true,
-        creator: { select: { name: true } },
+        creatorId: true,
+        creator: { select: { id: true, name: true } },
         messages: {
           orderBy: { orderIndex: "asc" },
-          take: 6, // 최대 3쌍 (Q-A)
+          take: 4,
           select: {
             id: true,
             role: true,
@@ -36,12 +36,12 @@ export async function GET() {
         investments: {
           where: { isActive: true },
           orderBy: { createdAt: "desc" },
-          take: 5,
+          take: 3,
           select: {
             id: true,
             amount: true,
             isNegative: true,
-            user: { select: { name: true } },
+            user: { select: { id: true, name: true } },
           },
         },
         totalInvested: true,
@@ -52,34 +52,30 @@ export async function GET() {
 
     const qaSetIds = qaSets.map((q) => q.id);
 
-    // 2. OpinionNode 연결된 것들
+    // OpinionNodes
     const opinions = await prisma.opinionNode.findMany({
       where: {
         relationsAsSource: { some: { targetQASetId: { in: qaSetIds } } },
       },
-      take: 20,
+      take: 15,
       select: {
         id: true,
         content: true,
         user: { select: { name: true } },
         relationsAsSource: {
           where: { targetQASetId: { in: qaSetIds } },
-          select: {
-            targetQASetId: true,
-            relationType: true,
-          },
+          select: { targetQASetId: true, relationType: true },
         },
       },
     });
 
-    // 3. NodeRelation (QASet간 지식 관계)
+    // NodeRelations (QASet간)
     const relations = await prisma.nodeRelation.findMany({
       where: {
         sourceQASetId: { in: qaSetIds },
         targetQASetId: { in: qaSetIds },
       },
       select: {
-        id: true,
         sourceQASetId: true,
         targetQASetId: true,
         relationType: true,
@@ -88,40 +84,53 @@ export async function GET() {
       },
     });
 
-    // ─── Build nodes ───
-    type GraphNode = {
+    // ─── Build ───
+    type GNode = {
       id: string;
-      type: "question" | "answer" | "invest" | "hunt" | "opinion";
+      type: "question" | "answer" | "invest" | "hunt" | "opinion" | "author";
       label: string;
       sublabel?: string;
       qaSetId: string;
       amount?: number;
       relationSimple?: string | null;
     };
-    type GraphEdge = {
+    type GEdge = {
       source: string;
       target: string;
-      type: "qa" | "followup" | "invest" | "hunt" | "opinion" | "knowledge" | "fork";
+      type: "qa" | "followup" | "invest" | "hunt" | "opinion" | "knowledge" | "fork" | "author";
       label?: string;
       relationType?: string;
       isAIGenerated?: boolean;
       isUserConfirmed?: boolean;
     };
 
-    const nodes: GraphNode[] = [];
-    const edges: GraphEdge[] = [];
-    const qaSetFirstMsgId = new Map<string, string>(); // qaSetId → first message id
+    const nodes: GNode[] = [];
+    const edges: GEdge[] = [];
+    const qaSetFirstMsgId = new Map<string, string>();
+    const seenAuthors = new Set<string>();
 
     for (const qs of qaSets) {
+      // 작성자 노드
+      if (!seenAuthors.has(qs.creatorId)) {
+        seenAuthors.add(qs.creatorId);
+        nodes.push({
+          id: `author-${qs.creatorId}`,
+          type: "author",
+          label: qs.creator?.name ?? "익명",
+          qaSetId: qs.id,
+        });
+      }
+
       let prevMsgId: string | null = null;
       let prevRole: string | null = null;
 
       for (const msg of qs.messages) {
         const isQ = msg.role === "user";
+        const firstLine = msg.content.split("\n")[0];
         nodes.push({
           id: msg.id,
           type: isQ ? "question" : "answer",
-          label: msg.content.slice(0, 40) + (msg.content.length > 40 ? "..." : ""),
+          label: firstLine.slice(0, 50) + (firstLine.length > 50 ? "..." : ""),
           sublabel: isQ ? undefined : qs.creator?.name ?? undefined,
           qaSetId: qs.id,
           relationSimple: msg.relationSimple,
@@ -129,15 +138,18 @@ export async function GET() {
 
         if (msg.orderIndex === 0) {
           qaSetFirstMsgId.set(qs.id, msg.id);
+          // 작성자 → 첫 질문
+          edges.push({
+            source: `author-${qs.creatorId}`,
+            target: msg.id,
+            type: "author",
+          });
         }
 
-        // Q→A 또는 후속질문 엣지
         if (prevMsgId) {
           if (prevRole === "user" && !isQ) {
-            // Q → A
             edges.push({ source: prevMsgId, target: msg.id, type: "qa" });
           } else if (prevRole === "assistant" && isQ) {
-            // A → Q (후속질문)
             edges.push({
               source: prevMsgId,
               target: msg.id,
@@ -151,7 +163,7 @@ export async function GET() {
         prevRole = msg.role;
       }
 
-      // 투자 노드 (상위 3개만, 시각적으로)
+      // 투자 노드
       for (const inv of qs.investments.slice(0, 3)) {
         const invNodeId = `inv-${inv.id}`;
         nodes.push({
@@ -161,9 +173,7 @@ export async function GET() {
           qaSetId: qs.id,
           amount: inv.amount,
         });
-        // 투자 → QASet의 마지막 답변 노드 (또는 첫 메시지)
-        const targetMsg = qs.messages.filter((m) => m.role === "assistant").pop()
-          ?? qs.messages[0];
+        const targetMsg = qs.messages.filter((m) => m.role === "assistant").pop() ?? qs.messages[0];
         if (targetMsg) {
           edges.push({
             source: invNodeId,
@@ -178,14 +188,14 @@ export async function GET() {
     // 의견 노드
     for (const op of opinions) {
       const opNodeId = `op-${op.id}`;
+      const firstLine = op.content.split("\n")[0];
       nodes.push({
         id: opNodeId,
         type: "opinion",
-        label: op.content.slice(0, 40) + (op.content.length > 40 ? "..." : ""),
+        label: firstLine.slice(0, 40) + (firstLine.length > 40 ? "..." : ""),
         sublabel: op.user?.name ?? undefined,
         qaSetId: op.relationsAsSource[0]?.targetQASetId ?? "",
       });
-      // 의견 → QASet 첫 메시지
       for (const rel of op.relationsAsSource) {
         if (rel.targetQASetId) {
           const targetId = qaSetFirstMsgId.get(rel.targetQASetId);
@@ -202,7 +212,7 @@ export async function GET() {
       }
     }
 
-    // 포크 관계 (parent → child 첫 메시지)
+    // 포크
     for (const qs of qaSets) {
       if (qs.parentQASetId && qaSetFirstMsgId.has(qs.parentQASetId) && qaSetFirstMsgId.has(qs.id)) {
         edges.push({
@@ -213,7 +223,7 @@ export async function GET() {
       }
     }
 
-    // 지식 관계 (AI제안/사용자확정 구분)
+    // 지식 관계
     for (const rel of relations) {
       if (rel.sourceQASetId && rel.targetQASetId) {
         const srcId = qaSetFirstMsgId.get(rel.sourceQASetId);
