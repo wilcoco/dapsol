@@ -11,6 +11,7 @@ interface ReviewGuideProps {
   qaSet: QASetWithMessages;
   isOwner: boolean;
   userId?: string;
+  isHumanAnswer?: boolean;
   onInvest: () => void;
   onCounterInvest: () => void;
   onShareQA: () => void;
@@ -142,6 +143,7 @@ export function ReviewGuide({
   qaSet,
   isOwner,
   userId,
+  isHumanAnswer,
   onInvest,
   onCounterInvest,
   onShareQA,
@@ -201,7 +203,47 @@ export function ReviewGuide({
   };
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // 시나리오 A: 본인 QA, 미공유
+  // 시나리오 H: 내가 직접 답변한 경우 (humanAnswerMode)
+  // 자기 답변을 자기가 평가하는 건 이상 → 공유 + 추가질문만
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  if (isHumanAnswer && isOwner && !qaSet.isShared) {
+    return (
+      <div className="mt-6 mb-2">
+        <div className="max-w-3xl mx-auto space-y-3">
+          <JourneyStepper step={2} />
+
+          {/* 답변 완료 축하 + 공유 유도 */}
+          <div className="relative overflow-hidden rounded-2xl border-2 border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-950/30 dark:via-teal-950/30 dark:to-cyan-950/30 p-5">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-200/20 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="relative space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">✅</span>
+                <div>
+                  <h3 className="text-base font-semibold">답변이 등록되었습니다!</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    이제 공유하면 다른 사람들이 투자하고, 의견을 달 수 있습니다
+                  </p>
+                </div>
+              </div>
+              <Button onClick={onShareQA} className="w-full gap-2 h-10 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
+                📢 공유하고 투자 받기
+              </Button>
+            </div>
+          </div>
+
+          {/* 추가 질문 */}
+          <FollowUpInput
+            followUpText={followUpText}
+            setFollowUpText={setFollowUpText}
+            onSend={handleSendFollowUp}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // 시나리오 A: 본인 QA, 미공유 (AI 답변)
   // 핵심 변경: 공유 전에도 판단(반대투자) + 의견 + 추가질문 가능
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   if (isOwner && !qaSet.isShared) {

@@ -447,6 +447,7 @@ export function Section2Workspace({
               qaSet={qaSet}
               isOwner={isOwner}
               userId={session?.user?.id}
+              isHumanAnswer={humanAnswerMode}
               onInvest={() => setShowInvestDialog(true)}
               onCounterInvest={() => setShowHuntDialog(true)}
               onShareQA={() => setShowShareDialog(true)}
