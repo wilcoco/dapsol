@@ -128,8 +128,14 @@
 /* ─── Live Activity Graph Animations ─── */
 @keyframes live-graph-enter {
   0% { opacity: 0; transform: scale(0.3); }
-  60% { opacity: 1; transform: scale(1.1); }
+  50% { opacity: 1; transform: scale(var(--pop-scale, 1.1)); }
+  70% { transform: scale(calc(var(--pop-scale, 1.1) * 0.92)); }
+  85% { transform: scale(calc(var(--pop-scale, 1.1) * 0.98)); }
   100% { opacity: 1; transform: scale(1); }
+}
+@keyframes live-graph-breathe-node {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(var(--breathe-scale, 1.03)); }
 }
 @keyframes live-graph-pulse-green {
   0% { stroke: #22c55e; stroke-width: 2; stroke-opacity: 0.8; }

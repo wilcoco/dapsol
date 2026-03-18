@@ -371,8 +371,8 @@ function computeRadialLayout(
   }
 
   // ─── Collision resolution (iterative repulsion) ───
-  const PAD = 6; // minimum gap between nodes
-  const ITERATIONS = 12;
+  const PAD = 14; // minimum gap between nodes (increased from 6)
+  const ITERATIONS = 30;
   for (let iter = 0; iter < ITERATIONS; iter++) {
     let anyMoved = false;
     for (let a = 0; a < layout.length; a++) {
@@ -560,8 +560,8 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap, onNavigateTo
   } | null>(null);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const vw = isMobile ? 400 : 800;
-  const vh = isMobile ? 300 : 420;
+  const vw = isMobile ? 440 : 900;
+  const vh = isMobile ? 340 : 500;
 
   useEffect(() => {
     abortRef.current?.abort();
@@ -791,7 +791,7 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap, onNavigateTo
           ref={svgRef}
           viewBox={`0 0 ${vw} ${vh}`}
           className="w-full h-auto"
-          style={{ maxHeight: isMobile ? 300 : 420, touchAction: "none" }}
+          style={{ maxHeight: isMobile ? 340 : 500, touchAction: "none" }}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
@@ -904,13 +904,23 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap, onNavigateTo
             const nSeq = nodeOrder.get(node.id) ?? i;
             const nDelay = nSeq * BFS_STEP_MS;
 
+            // Importance-based pop scale: bigger pop for higher investment/amount
+            const importance = node.amount
+              ? Math.min(node.amount / 100, 2) // invest nodes: amount-based
+              : (node.type === "question" || node.type === "answer") ? 0.5 : 0.2;
+            const popScale = 1.1 + importance * 0.3; // range: 1.1 ~ 1.7
+            const breatheScale = 1 + importance * 0.02; // range: 1.0 ~ 1.04
+            const breatheDur = 3 + Math.random() * 2; // 3~5s, desynchronized
+
             return (
               <g
                 key={node.id}
                 style={{
                   opacity: 0,
                   transformOrigin: `${node.x}px ${node.y}px`,
-                  animation: `live-graph-enter 0.5s ease-out ${nDelay}ms forwards`,
+                  ["--pop-scale" as string]: popScale,
+                  ["--breathe-scale" as string]: breatheScale,
+                  animation: `live-graph-enter 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${nDelay}ms forwards, live-graph-breathe-node ${breatheDur}s ease-in-out ${nDelay + 600}ms infinite`,
                   cursor: dragRef.current?.nodeId === node.id ? "grabbing" : "grab",
                 }}
                 onPointerDown={(e) => handlePointerDown(node.id, e)}
