@@ -441,8 +441,8 @@ export function Section2Workspace({
             </Card>
           )}
 
-          {/* ═══ 행동 가이드 — 메시지 스크롤 안에서 자연스럽게 ═══ */}
-          {hasMessages && !isStreaming && (
+          {/* ═══ 행동 가이드 — 답변(AI 또는 인간)이 있을 때만 표시 ═══ */}
+          {hasMessages && !isStreaming && messages.some(m => m.role === "assistant") && (
             <ReviewGuide
               qaSet={qaSet}
               isOwner={isOwner}
