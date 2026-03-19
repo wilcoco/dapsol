@@ -38,6 +38,9 @@ model User {
   accounts      Account[]
   sessions      Session[]
 
+  // System AI flag
+  isSystemAI    Boolean   @default(false)
+
   // App relations
   qaSets            QASet[]
   investments       Investment[]
@@ -45,6 +48,10 @@ model User {
   improvedMessages  Message[]        @relation("ImprovedBy")
   opinionNodes      OpinionNode[]
   notifications     Notification[]
+
+  // Cluster relations
+  clusterMemberships ClusterMember[]
+  createdClusters    TopicCluster[]  @relation("ClusterCreator")
 }
 
 model Account {
@@ -133,6 +140,11 @@ model QASet {
 
   // Optimistic concurrency
   version          Int   @default(0)
+
+  // AI-generated question flags
+  isAIGenerated               Boolean @default(false)
+  aiQuestionType              String?  // "professional" | "community"
+  firstAnswerRewardMultiplier Float   @default(1.0)
 
   // Metrics
   burnedAmount     Int   @default(0)    // 총 소각된 포인트
@@ -318,14 +330,29 @@ model NodeRelation {
 
 model TopicCluster {
   id                String    @id @default(cuid())
-  name              String                          // AI-generated topic name
+  name              String                          // Topic name
   nameEn            String?                         // English version
   description       String?
   centroidEmbedding String?                         // JSON array of floats (average of member embeddings)
   synthesisText     String?                         // AI-generated synthesis (markdown)
   synthesizedAt     DateTime?
 
+  // Human-created cluster (like subreddit)
+  createdById       String?
+  createdBy         User?     @relation("ClusterCreator", fields: [createdById], references: [id])
+  isManual          Boolean   @default(false)       // true = human-created, false = AI-clustered
+  accessType        String    @default("public")    // "public" | "private" | "invite_only"
+
+  // AI question generation config
+  aiQuestionEnabled     Boolean   @default(false)
+  aiQuestionInterval    Int       @default(24)      // hours between generations
+  aiLastQuestionAt      DateTime?
+  aiQuestionType        String    @default("professional") // "professional" | "community"
+  aiPromptHint          String?                     // custom prompt guidance
+
+  // Relations
   qaSets            QASet[]
+  members           ClusterMember[]
   knowledgeGaps     KnowledgeGap[]
   evolutionEvents   KnowledgeEvolutionEvent[]
   contributions     UserTopicContribution[]
@@ -337,6 +364,23 @@ model TopicCluster {
   updatedAt         DateTime  @updatedAt
 
   @@index([name])
+  @@index([createdById])
+  @@index([accessType])
+}
+
+model ClusterMember {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clusterId   String
+  cluster     TopicCluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  role        String   @default("member")  // "admin" | "member"
+  joinedAt    DateTime @default(now())
+  invitedById String?
+
+  @@unique([userId, clusterId])
+  @@index([clusterId])
+  @@index([userId])
 }
 
 model ClusterRelation {

@@ -56,6 +56,11 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
   const [showFrontierToast, setShowFrontierToast] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [aiQuestions, setAiQuestions] = useState<KnowledgeGap[]>([]);
+  const [aiGeneratedQs, setAiGeneratedQs] = useState<Array<{
+    id: string; title: string; question: string;
+    aiQuestionType: string; rewardMultiplier: number;
+    answerCount: number; cluster: { id: string; name: string } | null;
+  }>>([]);
   const [cultivatingId, setCultivatingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,10 +94,16 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
       })
       .catch(() => {});
 
-    // AI questions (🤖→👤)
+    // AI knowledge gaps (🤖→👤)
     fetch("/api/knowledge-gaps")
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d?.gaps) setAiQuestions(d.gaps.slice(0, 3)); })
+      .catch(() => {});
+
+    // AI-generated questions (🤖 AI가 묻고 있습니다)
+    fetch("/api/qa-sets/ai-questions?limit=5")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.questions) setAiGeneratedQs(d.questions); })
       .catch(() => {});
 
     // Tags for cluster filter
@@ -377,6 +388,49 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                       <span className="ml-1 opacity-60">{tag.count}</span>
                     </button>
                   ))}
+                </div>
+              )}
+
+              {/* ── 🤖 AI가 묻고 있습니다 (AI-generated questions) ── */}
+              {aiGeneratedQs.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-base font-bold">🤖</span>
+                    <span className="text-sm font-semibold">AI가 묻고 있습니다</span>
+                    <span className="text-[10px] text-muted-foreground">답변하고 보상을 받으세요</span>
+                  </div>
+                  <div className="space-y-2">
+                    {aiGeneratedQs.map((q) => (
+                      <button
+                        key={q.id}
+                        onClick={() => onSelectSharedQA(q.id)}
+                        className="w-full text-left p-3.5 rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-all group"
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="text-lg shrink-0 mt-0.5">
+                            {q.aiQuestionType === "community" ? "💬" : "🔬"}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium leading-snug">{q.title}</p>
+                            <div className="flex items-center gap-2 mt-1.5">
+                              {q.cluster && (
+                                <span className="text-[10px] text-muted-foreground">{q.cluster.name}</span>
+                              )}
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+                                {q.aiQuestionType === "community"
+                                  ? `${q.answerCount}명 답변 중 · 첫 답변자 보상 ${q.rewardMultiplier}배`
+                                  : "AI 답변 있음 · 검증 필요"
+                                }
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-xs text-amber-600 dark:text-amber-400 font-medium shrink-0 self-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            답변하기 →
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 

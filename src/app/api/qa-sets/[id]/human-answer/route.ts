@@ -33,7 +33,9 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (qaSet.creatorId !== session.user.id) {
+  // AI 커뮤니티 질문은 누구나 답변 가능, 그 외에는 본인만
+  const isAICommunityQuestion = qaSet.isAIGenerated && qaSet.aiQuestionType === "community";
+  if (!isAICommunityQuestion && qaSet.creatorId !== session.user.id) {
     return NextResponse.json({ error: "본인의 Q&A에만 답변할 수 있습니다." }, { status: 403 });
   }
 

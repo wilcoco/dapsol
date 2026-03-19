@@ -432,6 +432,84 @@ async function main() {
   });
   console.log(`✅ 알림 4개 생성`);
 
+  // ── 11. 시스템 AI 유저 + 커뮤니티 클러스터 + AI 생성 질문 ──
+  const systemAI = await prisma.user.upsert({
+    where: { email: "system-ai@collective-intelligence.local" },
+    update: {},
+    create: { name: "AI 시스템", email: "system-ai@collective-intelligence.local", isSystemAI: true, balance: 0, trustLevel: 5 },
+  });
+  console.log(`✅ 시스템 AI 유저 생성`);
+
+  // 기존 전문 클러스터에 AI 질문 활성화
+  await prisma.topicCluster.updateMany({
+    where: { id: { in: [cluster1.id, cluster2.id, cluster3.id] } },
+    data: { aiQuestionEnabled: true, aiQuestionType: "professional" },
+  });
+
+  // 커뮤니티 클러스터 3개
+  const commCluster1 = await prisma.topicCluster.create({
+    data: {
+      name: "유머/경험담",
+      nameEn: "Humor & Stories",
+      description: "제조 현장에서 겪은 재미있고 황당한 경험을 공유하세요",
+      isManual: false,
+      aiQuestionEnabled: true,
+      aiQuestionType: "community",
+      aiPromptHint: "제조업 현장에서의 재미있고 황당한 경험을 묻는 질문. 가볍고 유머러스하게.",
+    },
+  });
+  const commCluster2 = await prisma.topicCluster.create({
+    data: {
+      name: "오늘 배운 것",
+      nameEn: "Today I Learned",
+      description: "오늘 새로 알게 된 제조/기술 관련 사실을 공유하세요",
+      isManual: false,
+      aiQuestionEnabled: true,
+      aiQuestionType: "community",
+      aiPromptHint: "제조업에서 사람들이 모를 만한 흥미로운 사실이나 팁을 묻는 질문.",
+    },
+  });
+  const commCluster3 = await prisma.topicCluster.create({
+    data: {
+      name: "업무 꿀팁",
+      nameEn: "Work Pro Tips",
+      description: "다른 사람은 모르는 나만의 업무 노하우를 공유하세요",
+      isManual: false,
+      aiQuestionEnabled: true,
+      aiQuestionType: "community",
+      aiPromptHint: "제조 현장에서 효율을 높이는 실용적인 팁이나 노하우를 묻는 질문.",
+    },
+  });
+  console.log(`✅ 커뮤니티 클러스터 3개 생성`);
+
+  // AI 생성 질문 시드 (커뮤니티)
+  const aiQuestions = [
+    { clusterId: commCluster1.id, title: "공장에서 겪은 가장 황당한 불량 사고는?", question: "제조 현장에서 일하다 보면 예상치 못한 황당한 불량이 발생할 때가 있죠. 여러분이 겪은 가장 기억에 남는 황당한 불량 사고나 에피소드를 공유해주세요! 원인이 뭐였는지, 어떻게 해결했는지도 함께 알려주시면 더 좋습니다." },
+    { clusterId: commCluster2.id, title: "오늘 알게 된 제조업 관련 신기한 사실은?", question: "제조업에서 일하면서 '이런 것도 있었어?'라고 놀란 적 있으신가요? 소재 특성, 공정 비밀, 업계 관행 등 오늘 새로 알게 된 흥미로운 사실을 공유해주세요." },
+    { clusterId: commCluster3.id, title: "생산성을 2배로 올려준 나만의 업무 꿀팁은?", question: "같은 일을 해도 더 빠르고 정확하게 하는 나만의 방법이 있으신가요? 도구, 습관, 체크리스트, 엑셀 매크로 등 어떤 형태든 좋습니다. 현장에서 검증된 업무 꿀팁을 공유해주세요!" },
+    { clusterId: commCluster1.id, title: "신입 때 저지른 최대 실수는?", question: "누구나 신입 시절에는 실수를 하죠. 지금 생각하면 웃기지만 당시에는 식은땀이 났던, 신입 때 저지른 가장 큰 실수를 공유해주세요. 후배들에게 좋은 교훈이 될 겁니다!" },
+    { clusterId: commCluster3.id, title: "금형 세팅 시간을 절반으로 줄이는 방법 있나요?", question: "금형 교체와 세팅은 시간이 많이 걸리는 작업입니다. SMED(Single Minute Exchange of Die) 같은 정석 방법 외에, 현장에서 실제로 효과를 본 시간 단축 노하우가 있으면 공유해주세요!" },
+  ];
+
+  for (const q of aiQuestions) {
+    await prisma.qASet.create({
+      data: {
+        title: q.title,
+        creatorId: systemAI.id,
+        topicClusterId: q.clusterId,
+        isShared: true,
+        sharedAt: new Date(),
+        isAIGenerated: true,
+        aiQuestionType: "community",
+        firstAnswerRewardMultiplier: 3.0,
+        messages: {
+          create: { role: "user", content: q.question, orderIndex: 0 },
+        },
+      },
+    });
+  }
+  console.log(`✅ AI 생성 질문 ${aiQuestions.length}개 생성 (커뮤니티)`);
+
   console.log("\n🎉 범퍼 제조업 시드 데이터 생성 완료!");
   console.log("\n로그인: Demo Account로 '박공장장', '김품질팀장', '이사출기술', '최도장전문', '정설비엔지니어', '한신입사원' 입력");
 }
