@@ -200,12 +200,12 @@ export async function tsvectorSearch(
   query: string,
   limit: number = 200
 ): Promise<{ id: string; rank: number }[]> {
-  // Split on whitespace, filter short tokens, sanitize for tsquery
+  // Split on whitespace, filter short tokens, sanitize + lowercase for tsquery
   const terms = query
     .trim()
     .split(/\s+/)
     .filter((t) => t.length >= 2)
-    .map((t) => t.replace(/['"\\&|!():*<>]/g, ""));
+    .map((t) => t.replace(/['"\\&|!():*<>]/g, "").toLowerCase());
 
   if (terms.length === 0) return [];
 

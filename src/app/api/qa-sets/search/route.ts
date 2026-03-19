@@ -186,9 +186,9 @@ async function fallbackTextSearch(
   const allTerms = Array.from(new Set([query, ...baseTokens, ...expandedTerms]));
 
   const termConditions = allTerms.flatMap((term) => [
-    { title: { contains: term } },
-    { summary: { contains: term } },
-    { searchKeywords: { contains: term } },
+    { title: { contains: term, mode: "insensitive" as const } },
+    { summary: { contains: term, mode: "insensitive" as const } },
+    { searchKeywords: { contains: term, mode: "insensitive" as const } },
   ]);
 
   if (termConditions.length === 0) {
