@@ -641,36 +641,46 @@ export function NavigableKnowledgeMap({
     <div className="h-full flex flex-col">
       {/* ── Toolbar ── */}
       <div className="px-4 py-2 border-b flex items-center gap-3 shrink-0 flex-wrap">
-        {/* Zoom level toggle */}
-        <div className="flex rounded-lg border overflow-hidden">
-          <button
-            onClick={() => { if (zoomLevel !== "cluster") zoomOutToCluster(); }}
-            className={`px-3 py-1 text-xs font-medium transition-colors ${
-              zoomLevel === "cluster"
-                ? "bg-primary text-primary-foreground"
-                : "bg-background hover:bg-muted text-muted-foreground"
-            }`}
-          >
-            주제 영역
-          </button>
-          <button
-            onClick={() => {
-              if (zoomLevel !== "qaset") {
-                if (selectedClusterId) {
-                  zoomIntoCluster(selectedClusterId);
-                } else {
-                  setZoomLevel("qaset");
+        {/* Zoom level toggle with explanation */}
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border overflow-hidden">
+            <button
+              onClick={() => { if (zoomLevel !== "cluster") zoomOutToCluster(); }}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                zoomLevel === "cluster"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background hover:bg-muted text-muted-foreground"
+              }`}
+              title="주제별 그룹 (예: 사출 성형 기술, 도장 공정)"
+            >
+              🏷️ 주제 영역
+            </button>
+            <button
+              onClick={() => {
+                if (zoomLevel !== "qaset") {
+                  if (selectedClusterId) {
+                    zoomIntoCluster(selectedClusterId);
+                  } else {
+                    setZoomLevel("qaset");
+                  }
                 }
-              }
-            }}
-            className={`px-3 py-1 text-xs font-medium transition-colors ${
-              zoomLevel === "qaset"
-                ? "bg-primary text-primary-foreground"
-                : "bg-background hover:bg-muted text-muted-foreground"
-            }`}
-          >
-            지식 단위
-          </button>
+              }}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                zoomLevel === "qaset"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background hover:bg-muted text-muted-foreground"
+              }`}
+              title="개별 Q&A (예: PP 수축마크 해결법)"
+            >
+              💬 개별 Q&A
+            </button>
+          </div>
+          <span className="text-[10px] text-muted-foreground hidden sm:inline">
+            {zoomLevel === "cluster"
+              ? "주제별 그룹을 탐색 중 · 더블클릭하면 Q&A 목록으로"
+              : "개별 Q&A를 탐색 중 · 줌 아웃하면 주제 영역으로"
+            }
+          </span>
         </div>
 
         {/* Context info */}

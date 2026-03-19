@@ -12,12 +12,12 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import type { QASetWithMessages } from "@/types/qa-set";
 
-type ActiveTab = "territory" | "pioneer" | "map" | "profile";
+type ActiveTab = "feed" | "ask" | "map" | "profile";
 
 export default function HomePage() {
   const { data: session, status, update: updateSession } = useSession();
   const [activeQASet, setActiveQASet] = useState<QASetWithMessages | null>(null);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("territory");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("feed");
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [humanAnswerMode, setHumanAnswerMode] = useState(false);
   const [clusterFocusId, setClusterFocusId] = useState<string | null>(null);
@@ -26,10 +26,10 @@ export default function HomePage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const section = params.get("section");
-    if (section === "territory" || section === "section1" || section === "conversation") {
-      setActiveTab("territory");
-    } else if (section === "pioneer" || section === "answer") {
-      setActiveTab("pioneer");
+    if (section === "feed" || section === "territory" || section === "section1" || section === "conversation") {
+      setActiveTab("feed");
+    } else if (section === "ask" || section === "pioneer" || section === "answer") {
+      setActiveTab("ask");
     } else if (section === "map" || section === "explore" || section === "section3" || section === "section5") {
       setActiveTab("map");
     } else if (section === "profile" || section === "activity" || section === "section4") {
@@ -69,7 +69,7 @@ export default function HomePage() {
       const qaSet = await res.json();
       setActiveQASet(qaSet);
       setPendingQuestion(null);
-      setActiveTab("territory");
+      setActiveTab("ask");
     } catch (error) {
       console.error("Failed to load QA set:", error);
     }
@@ -93,7 +93,7 @@ export default function HomePage() {
       setActiveQASet(qaSet);
       setPendingQuestion(null);
       setHumanAnswerMode(true);
-      setActiveTab("territory");
+      setActiveTab("ask");
     } catch (error) {
       console.error("Failed to start human answer:", error);
     }
@@ -171,8 +171,8 @@ export default function HomePage() {
   }
 
   const tabs: { key: ActiveTab; label: string; icon: string }[] = [
-    { key: "territory", label: "홈", icon: "🏠" },
-    { key: "pioneer", label: "질문", icon: "✨" },
+    { key: "feed", label: "피드", icon: "🏠" },
+    { key: "ask", label: "묻기", icon: "✨" },
     { key: "map", label: "지도", icon: "🗺️" },
     { key: "profile", label: "나", icon: "👤" },
   ];
@@ -195,7 +195,7 @@ export default function HomePage() {
               }`}
             >
               {tab.icon} {tab.label}
-              {tab.key === "territory" && activeQASet && (
+              {tab.key === "ask" && activeQASet && (
                 <span className="ml-1.5 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs max-w-[120px] truncate">
                   {activeQASet.title ?? "진행 중"}
                 </span>
@@ -207,14 +207,14 @@ export default function HomePage() {
 
       {/* Main content */}
       <main className="flex-1 overflow-hidden">
-        {/* 🏠 홈: 검색 + Q&A 워크스페이스 */}
-        <div className={activeTab === "territory" ? "block h-full" : "hidden"}>
+        {/* 🏠 피드: 검색 + 트렌딩 + 지식네트워크 (발견) */}
+        <div className={activeTab === "feed" ? "block h-full" : "hidden"}>
           <div className="h-full relative">
             <div className={activeQASet ? "hidden" : "block h-full"}>
               <Section1QuestionInput
-                onNewQuestion={handleNewQuestion}
-                onSelectSharedQA={handleSelectSharedQA}
-                onAnswerGap={handleAnswerGap}
+                onNewQuestion={(q) => { handleNewQuestion(q); setActiveTab("ask"); }}
+                onSelectSharedQA={(id) => { handleSelectSharedQA(id); setActiveTab("ask"); }}
+                onAnswerGap={(gapId, desc) => { handleAnswerGap(gapId, desc); setActiveTab("ask"); }}
                 onNavigateToMap={() => setActiveTab("map")}
                 onNavigateToCluster={(clusterId) => {
                   setClusterFocusId(clusterId);
@@ -229,7 +229,7 @@ export default function HomePage() {
                   initialQuestion={pendingQuestion}
                   onInitialQuestionSent={() => setPendingQuestion(null)}
                   onQASetUpdated={handleQASetUpdated}
-                  onBack={handleBackToSearch}
+                  onBack={() => { handleBackToSearch(); setActiveTab("feed"); }}
                   humanAnswerMode={humanAnswerMode}
                   onHumanAnswerDone={() => setHumanAnswerMode(false)}
                 />
@@ -238,13 +238,54 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* ✨ 질문: 🤖→👤 AI가 인간에게 질문하는 갭 목록 */}
-        <div className={activeTab === "pioneer" ? "block h-full" : "hidden"}>
-          <AnswerGaps
-            onAnswerGap={(gapId, description) => {
-              handleAnswerGap(gapId, description);
-            }}
-          />
+        {/* ✨ 묻기: AI에게 질문 + Q&A 워크스페이스 (핵심 행동) */}
+        <div className={activeTab === "ask" ? "block h-full" : "hidden"}>
+          {activeQASet ? (
+            <Section2Workspace
+              qaSet={activeQASet}
+              initialQuestion={pendingQuestion}
+              onInitialQuestionSent={() => setPendingQuestion(null)}
+              onQASetUpdated={handleQASetUpdated}
+              onBack={handleBackToSearch}
+              humanAnswerMode={humanAnswerMode}
+              onHumanAnswerDone={() => setHumanAnswerMode(false)}
+            />
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center p-6">
+              <div className="max-w-lg w-full text-center space-y-6">
+                <div className="text-5xl">✨</div>
+                <h2 className="text-2xl font-bold">AI에게 물어보세요</h2>
+                <p className="text-muted-foreground">
+                  무엇이든 질문하면 AI가 답변하고,<br />
+                  커뮤니티가 검증하고 투자합니다
+                </p>
+                <div className="flex gap-2 max-w-md mx-auto">
+                  <input
+                    type="text"
+                    placeholder="궁금한 것을 입력하세요..."
+                    className="flex-1 h-12 px-4 text-base rounded-xl border-2 focus:outline-none focus:border-primary"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.target as HTMLInputElement).value.trim()) {
+                        handleNewQuestion((e.target as HTMLInputElement).value.trim());
+                        (e.target as HTMLInputElement).value = "";
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {["PP 수축마크 해결법", "도장 불량 원인", "금형 보전 주기"].map((ex) => (
+                    <button
+                      key={ex}
+                      onClick={() => handleNewQuestion(ex)}
+                      className="text-xs px-3 py-1.5 rounded-full border text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
+                    >
+                      {ex}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 🗺️ 지도: 3-level 줌 지식 그래프 */}
@@ -257,13 +298,21 @@ export default function HomePage() {
           />
         </div>
 
-        {/* 👤 나: 대시보드 */}
-        <div className={activeTab === "profile" ? "block h-full" : "hidden"}>
+        {/* 👤 나: 대시보드 + 기여 요청(AI→인간 갭) */}
+        <div className={activeTab === "profile" ? "block h-full overflow-y-auto" : "hidden"}>
           <MyDashboard
-            onSelectQASet={(qaSetId) => handleSelectSharedQA(qaSetId)}
-            onGoToSearch={() => { setActiveTab("territory"); handleBackToSearch(); }}
-            onGoToAnswer={() => setActiveTab("pioneer")}
+            onSelectQASet={(qaSetId) => { handleSelectSharedQA(qaSetId); setActiveTab("ask"); }}
+            onGoToSearch={() => { setActiveTab("feed"); handleBackToSearch(); }}
+            onGoToAnswer={() => setActiveTab("ask")}
           />
+          <div className="border-t">
+            <AnswerGaps
+              onAnswerGap={(gapId, description) => {
+                handleAnswerGap(gapId, description);
+                setActiveTab("ask");
+              }}
+            />
+          </div>
         </div>
       </main>
 
