@@ -26,6 +26,16 @@ const OPINION_RELATIONS = [
   { value: "extension", label: "확장", icon: "➕" },
 ];
 
+// AI 답변의 알려진 오류 유형 (학술 분류 기반)
+const AI_ERROR_TYPES = [
+  { value: "factual_error", label: "사실 오류", icon: "❌", desc: "틀린 사실이나 존재하지 않는 정보", color: "red" },
+  { value: "outdated_info", label: "오래된 정보", icon: "📅", desc: "현재 기준에 맞지 않는 과거 정보", color: "amber" },
+  { value: "hallucination", label: "환각(날조)", icon: "👻", desc: "그럴듯하지만 완전히 만들어낸 내용", color: "purple" },
+  { value: "oversimplification", label: "과도한 단순화", icon: "📐", desc: "복잡한 현실을 지나치게 단순화", color: "blue" },
+  { value: "missing_context", label: "맥락 누락", icon: "🔍", desc: "중요한 조건이나 예외를 빠뜨림", color: "orange" },
+  { value: "confident_uncertainty", label: "불확실한데 확신", icon: "🎭", desc: "모르는 것을 아는 것처럼 답변", color: "pink" },
+];
+
 // ─── Progress Stepper ───
 function JourneyStepper({ step }: { step: number }) {
   const steps = [
@@ -135,6 +145,119 @@ function FollowUpInput({
           <Send className="h-3 w-3" />
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ─── AI Error Type Selector ───
+function AIErrorFeedback({
+  qaSetId,
+  onSubmitted,
+}: {
+  qaSetId: string;
+  onSubmitted: () => void;
+}) {
+  const [selectedErrors, setSelectedErrors] = useState<string[]>([]);
+  const [detail, setDetail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const toggle = (value: string) => {
+    setSelectedErrors((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  };
+
+  const handleSubmit = async () => {
+    if (selectedErrors.length === 0 || submitting) return;
+    setSubmitting(true);
+    try {
+      const labels = selectedErrors
+        .map((v) => AI_ERROR_TYPES.find((t) => t.value === v)?.label)
+        .filter(Boolean);
+      const content = `[AI 오류 신고] ${labels.join(", ")}${detail.trim() ? `\n\n${detail.trim()}` : ""}`;
+
+      const opRes = await fetch("/api/opinions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      if (!opRes.ok) throw new Error("fail");
+      const opinion = await opRes.json();
+      await fetch("/api/relations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceOpinionId: opinion.id,
+          targetQASetId: qaSetId,
+          relationType: "counterargument",
+        }),
+      });
+      setDone(true);
+      onSubmitted();
+    } catch {
+      // ignore
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20 p-3 text-center">
+        <span className="text-sm text-green-700 dark:text-green-400">✅ 오류 신고가 등록되었습니다</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border p-3 space-y-2.5">
+      <div className="flex items-center gap-2">
+        <span className="text-base">🔎</span>
+        <span className="text-sm font-medium">AI 답변 오류 신고</span>
+        <span className="text-[10px] text-muted-foreground">해당하는 항목을 선택하세요</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+        {AI_ERROR_TYPES.map((err) => {
+          const selected = selectedErrors.includes(err.value);
+          return (
+            <button
+              key={err.value}
+              onClick={() => toggle(err.value)}
+              className={`text-left p-2 rounded-lg border transition-all text-[11px] ${
+                selected
+                  ? "border-red-400 bg-red-50 dark:bg-red-950/30 ring-1 ring-red-400"
+                  : "border-border hover:border-red-300 hover:bg-red-50/50 dark:hover:bg-red-950/10"
+              }`}
+            >
+              <div className="flex items-center gap-1">
+                <span>{err.icon}</span>
+                <span className="font-medium">{err.label}</span>
+              </div>
+              <p className="text-[9px] text-muted-foreground mt-0.5 leading-snug">{err.desc}</p>
+            </button>
+          );
+        })}
+      </div>
+      {selectedErrors.length > 0 && (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="구체적 내용 (선택)..."
+            value={detail}
+            onChange={(e) => setDetail(e.target.value)}
+            className="flex-1 h-8 px-2.5 text-xs rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <Button
+            size="sm"
+            disabled={submitting}
+            onClick={handleSubmit}
+            className="shrink-0 h-8 text-xs gap-1 bg-red-600 hover:bg-red-700 text-white"
+          >
+            {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : "🔎"} 신고
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -283,6 +406,9 @@ export function ReviewGuide({
               </div>
             </div>
           </div>
+
+          {/* AI 오류 신고 */}
+          <AIErrorFeedback qaSetId={qaSet.id} onSubmitted={onOpinionSubmitted} />
 
           {/* 의견 + 추가질문 — 공유 전에도 항상 접근 가능 */}
           <div className="grid grid-cols-2 gap-3">
@@ -443,6 +569,9 @@ export function ReviewGuide({
             </div>
           </div>
         )}
+
+        {/* ── AI 오류 신고 ── */}
+        <AIErrorFeedback qaSetId={qaSet.id} onSubmitted={onOpinionSubmitted} />
 
         {/* ── 의견 + 추가질문 (항상 2컬럼, 독립 접근) ── */}
         <div className="grid grid-cols-2 gap-3">
