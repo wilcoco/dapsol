@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { detectInsight } from "@/lib/knowledge/insight-detector";
 import { findRelevantGaps } from "@/lib/knowledge/gap-context";
 import { retrieveRelevantKnowledge, formatRAGContext } from "@/lib/chat/rag-context";
+import { retrieveHumanKnowledge, formatHumanKnowledgeContext } from "@/lib/chat/human-knowledge-retrieval";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
 import { trackLLMCall } from "@/lib/monitoring/llm-tracker";
@@ -128,7 +129,7 @@ INSTRUCTIONS FOR KNOWLEDGE GAPS:
       }
     }
 
-    // RAG context
+    // RAG context (existing Q&A knowledge cards)
     let ragContext = "";
     if (userMessageCount === 1 || userMessageCount % 3 === 0) {
       try {
@@ -141,9 +142,30 @@ INSTRUCTIONS FOR KNOWLEDGE GAPS:
       }
     }
 
+    // Human Knowledge context (insights, human-authored answers, opinions)
+    let humanKnowledgeContext = "";
+    if (userMessageCount === 1 || userMessageCount % 2 === 0) {
+      try {
+        const humanKnowledge = await retrieveHumanKnowledge(
+          userMessage?.content ?? firstUserContent,
+          {
+            excludeQASetId: qaSetId,
+            maxResults: 3,
+            minSimilarity: 0.35,
+            includeInsights: true,
+            includeOpinions: true,
+            includeHumanAnswers: true,
+          }
+        );
+        humanKnowledgeContext = formatHumanKnowledgeContext(humanKnowledge);
+      } catch (err) {
+        console.error("Human knowledge retrieval failed:", err);
+      }
+    }
+
     const finalSystem =
       (systemPrompt || "You are a helpful AI assistant. Respond in the same language as the user's question.") +
-      ragContext + gapInstructions +
+      ragContext + humanKnowledgeContext + gapInstructions +
       (isFollowUp ? "\n\nAfter answering, use the tag_relation tool to classify the relationship of this follow-up question." : "");
 
     // Fix human-authored assistant messages

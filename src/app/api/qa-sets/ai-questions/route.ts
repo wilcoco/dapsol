@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
     select: {
       id: true,
       title: true,
+      summary: true, // "왜 이 질문을?" 저장용
       aiQuestionType: true,
       firstAnswerRewardMultiplier: true,
       totalInvested: true,
@@ -42,6 +43,7 @@ export async function GET(req: NextRequest) {
     id: q.id,
     title: q.title,
     question: q.messages[0]?.content ?? "",
+    reason: q.summary, // "왜 이 질문을?"
     aiQuestionType: q.aiQuestionType,
     rewardMultiplier: q.firstAnswerRewardMultiplier,
     answerCount: q._count.forks,
