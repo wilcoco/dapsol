@@ -219,6 +219,9 @@ model Message {
   opinionNodes    OpinionNode[]
   nodeRelations   NodeRelation[] @relation("MessageOpinionTarget")
 
+  // 이 Message(문장)에 대한 발자국들
+  investments     Investment[]
+
   @@index([qaSetId, orderIndex])
 }
 
@@ -229,11 +232,16 @@ model Message {
 model Investment {
   id          String   @id @default(cuid())
 
-  // 발자국 대상 (QASet 또는 OpinionNode 중 하나)
+  // 발자국 대상 (QASet, OpinionNode, 또는 Message 문장)
   qaSetId       String?
   qaSet         QASet?       @relation(fields: [qaSetId], references: [id], onDelete: Cascade)
   opinionNodeId String?
   opinionNode   OpinionNode? @relation(fields: [opinionNodeId], references: [id], onDelete: Cascade)
+
+  // 문장 단위 발자국 (Message의 특정 문장)
+  messageId     String?
+  message       Message?     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  sentenceIndex Int?         // null = 전체, 0,1,2... = 특정 문장
 
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -260,6 +268,7 @@ model Investment {
 
   @@index([qaSetId, position])
   @@index([opinionNodeId])
+  @@index([messageId, sentenceIndex])
   @@index([userId])
 }
 
@@ -294,6 +303,9 @@ model OpinionNode {
   // 어떤 답변에 대한 의견인지
   messageId   String?
   message     Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  // 문장 단위 지정 (null = 전체 답변, 0,1,2... = 특정 문장)
+  sentenceIndex  Int?
 
   // 의견 유형
   type        String   @default("opinion")  // "opinion" | "ai_error" | "support" | "counter"
