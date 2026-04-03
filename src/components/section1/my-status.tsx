@@ -15,7 +15,7 @@ export function MyStatus() {
 
   if (!session?.user) return null;
 
-  const user = session.user as any;
+  const user = session.user as { balance?: number; trustLevel?: number; hubScore?: number; authorityScore?: number };
   const balance = user.balance ?? 0;
   const trustLevel = user.trustLevel ?? 1;
   const hubScore = user.hubScore ?? 100;

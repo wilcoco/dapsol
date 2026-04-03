@@ -15,23 +15,35 @@ interface OnboardingGuideProps {
 }
 
 export function OnboardingGuide({ hasAskedQuestion, onUnlockExplore }: OnboardingGuideProps) {
-  const [dismissed, setDismissed] = useState(true);
-  const [step1, setStep1] = useState(false);
-  const [step2, setStep2] = useState(false);
-  const [step3, setStep3] = useState(false);
+  // Use single state object for hydration to avoid multiple setState calls
+  const [state, setState] = useState({
+    dismissed: true, // Default to true so nothing shows before hydration
+    step1: false,
+    step2: false,
+    step3: false,
+    hydrated: false,
+  });
 
   useEffect(() => {
-    setDismissed(localStorage.getItem(STORAGE_KEY_DISMISSED) === "true");
-    setStep1(localStorage.getItem(STORAGE_KEY_STEP1) === "true");
-    setStep2(localStorage.getItem(STORAGE_KEY_STEP2) === "true");
-    setStep3(localStorage.getItem(STORAGE_KEY_STEP3) === "true");
+    // Hydrate from localStorage - this is a standard SSR hydration pattern
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setState({
+      dismissed: localStorage.getItem(STORAGE_KEY_DISMISSED) === "true",
+      step1: localStorage.getItem(STORAGE_KEY_STEP1) === "true",
+      step2: localStorage.getItem(STORAGE_KEY_STEP2) === "true",
+      step3: localStorage.getItem(STORAGE_KEY_STEP3) === "true",
+      hydrated: true,
+    });
   }, []);
 
-  // Track step1
+  const { dismissed, step1, step2, step3 } = state;
+
+  // Track step1 - setState is conditional on user action
   useEffect(() => {
     if (hasAskedQuestion && !step1) {
       localStorage.setItem(STORAGE_KEY_STEP1, "true");
-      setStep1(true);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setState((prev) => ({ ...prev, step1: true }));
     }
   }, [hasAskedQuestion, step1]);
 
@@ -47,15 +59,16 @@ export function OnboardingGuide({ hasAskedQuestion, onUnlockExplore }: Onboardin
     const interval = setInterval(() => {
       const s2 = localStorage.getItem(STORAGE_KEY_STEP2) === "true";
       const s3 = localStorage.getItem(STORAGE_KEY_STEP3) === "true";
-      if (s2 !== step2) setStep2(s2);
-      if (s3 !== step3) setStep3(s3);
+      if (s2 !== step2 || s3 !== step3) {
+        setState((prev) => ({ ...prev, step2: s2, step3: s3 }));
+      }
     }, 2000);
     return () => clearInterval(interval);
   }, [step2, step3]);
 
   const handleDismiss = () => {
     localStorage.setItem(STORAGE_KEY_DISMISSED, "true");
-    setDismissed(true);
+    setState((prev) => ({ ...prev, dismissed: true }));
   };
 
   if (dismissed) return null;

@@ -53,7 +53,9 @@ export function NotificationBell() {
 
   // Initial fetch + SSE for real-time, fallback to polling
   useEffect(() => {
-    fetchNotifications();
+    // Initial fetch - this pattern is valid for data loading on mount
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchNotifications();
 
     // Try SSE connection
     let eventSource: EventSource | null = null;

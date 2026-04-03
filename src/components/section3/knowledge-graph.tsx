@@ -54,11 +54,13 @@ export function Section3Graph({ qaSet, onSelectQASet, isActive = false }: Sectio
 
   const [viewBox, setViewBox] = useState({ x: 0, y: 0, width: 1200, height: 800 });
   const viewBoxRef = useRef(viewBox);
-  viewBoxRef.current = viewBox;
   const containerRef = useRef<HTMLDivElement>(null);
   const layerRef = useRef<HTMLDivElement>(null);
   const nodesRef = useRef(nodes);
-  nodesRef.current = nodes;
+
+  // Keep refs in sync with state values for use in callbacks
+  useEffect(() => { viewBoxRef.current = viewBox; }, [viewBox]);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
 
   // Interaction ref — survives across renders, no stale closure issues
   const dragState = useRef<
@@ -72,11 +74,13 @@ export function Section3Graph({ qaSet, onSelectQASet, isActive = false }: Sectio
 
   // ── Data fetching ──
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!qaSet) { setNodes([]); setEdges([]); lastLoadedRef.current = null; return; }
     if (!isActive) return;
     const cacheKey = `${qaSet.id}:${qaSet.messages?.length ?? 0}`;
     if (lastLoadedRef.current === cacheKey && nodes.length > 0) return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     fetch(`/api/graph?qaSetId=${qaSet.id}`)
       .then(res => res.ok ? res.json() : null)
@@ -91,6 +95,7 @@ export function Section3Graph({ qaSet, onSelectQASet, isActive = false }: Sectio
     if (nodes.length === 0) return;
     const pad = 60;
     const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setViewBox({
       x: Math.min(...xs) - NODE_W / 2 - pad,
       y: Math.min(...ys) - NODE_H / 2 - pad,

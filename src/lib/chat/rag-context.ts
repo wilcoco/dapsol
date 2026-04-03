@@ -97,7 +97,7 @@ async function searchByEmbedding(
       select: { id: true, title: true, knowledgeCard: true, investorCount: true, negativeCount: true },
     });
 
-    const results = qaSets.map((qa: any) => {
+    const results = qaSets.map((qa: { id: string; title: string | null; knowledgeCard: string | null; investorCount: number; negativeCount: number }) => {
       const card = parseKnowledgeCard(qa.knowledgeCard);
       return {
         qaSetId: qa.id,

@@ -515,7 +515,7 @@ export function Section2Workspace({
           onClose={() => setShowParentCompare(false)}
           parentQASetId={qaSet.parentQASetId}
           currentTitle={qaSet.title}
-          currentMessages={messages as any}
+          currentMessages={messages}
         />
       )}
       <ShareDialog

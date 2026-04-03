@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const session = await auth();
 
-  const where: any = {};
+  const where: { isShared?: boolean; creatorId?: string } = {};
 
   if (shared) {
     where.isShared = true;
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ qaSets: [] });
   }
 
-  const orderBy: any =
+  const orderBy =
     sort === "trending"
       ? { totalInvested: "desc" as const }
       : sort === "top"

@@ -75,7 +75,7 @@ export default function AdminPage() {
     setGenerating(true);
     setGenerated([]);
     try {
-      const body: any = { count };
+      const body: { count: number; topics?: string[] } = { count };
       if (customTopics.trim()) {
         body.topics = customTopics.split(",").map((t) => t.trim()).filter(Boolean);
       }

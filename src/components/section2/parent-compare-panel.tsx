@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import type { MessageData } from "@/types/qa-set";
 
 interface MessageRow {
   id: string;
@@ -27,7 +28,7 @@ interface ParentComparePanelProps {
   onClose: () => void;
   parentQASetId: string;
   currentTitle: string | null;
-  currentMessages: MessageRow[];
+  currentMessages: MessageRow[] | MessageData[];
 }
 
 export function ParentComparePanel({
@@ -42,6 +43,7 @@ export function ParentComparePanel({
 
   useEffect(() => {
     if (!open || !parentQASetId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetch(`/api/qa-sets/${parentQASetId}`)
       .then((r) => r.ok ? r.json() : null)

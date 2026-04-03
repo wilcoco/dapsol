@@ -87,7 +87,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
           const now = Date.now();
           const h48 = 48 * 60 * 60 * 1000;
           const fresh = (d.qaSets ?? []).filter(
-            (qa: any) => now - new Date(qa.createdAt).getTime() < h48
+            (qa: { createdAt: string }) => now - new Date(qa.createdAt).getTime() < h48
           );
           setSeedlingQAs(fresh.slice(0, 5));
         }
@@ -119,7 +119,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
       setTrendingQAs(allTrendingQAs.slice(0, 10));
     } else {
       const filtered = allTrendingQAs.filter((qa) =>
-        qa.tags?.some(({ tag }) => (tag as any).slug === activeTag || tag.name === activeTag)
+        qa.tags?.some(({ tag }) => (tag as { slug?: string; name: string }).slug === activeTag || tag.name === activeTag)
       );
       setTrendingQAs(filtered);
     }
@@ -504,7 +504,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
               ) : activeTag ? (
                 <div className="text-center py-10 text-muted-foreground space-y-2">
                   <div className="text-4xl">🏷️</div>
-                  <p className="font-medium">"{activeTag}" 태그가 달린 길이 없습니다</p>
+                  <p className="font-medium">&quot;{activeTag}&quot; 태그가 달린 길이 없습니다</p>
                   <button onClick={() => setActiveTag(null)} className="text-xs text-primary hover:underline">
                     전체 보기
                   </button>
@@ -607,8 +607,8 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                 <p className="font-bold text-base leading-tight">새로운 주제 발견!</p>
                 <p className="text-sm text-white/90 leading-snug">
                   아직 아무도 답하지 않은 영역입니다.<br />
-                  지금 Q&A를 만들면 <span className="font-semibold underline decoration-dotted">초기 투자 효과</span>로
-                  이후 투자자 보상을 받을 수 있습니다.
+                  지금 길을 개척하면 <span className="font-semibold underline decoration-dotted">개척자 효과</span>로
+                  이후 걸어가는 사람들로부터 보상을 받습니다.
                 </p>
               </div>
             </div>
@@ -713,8 +713,8 @@ function SearchResultItem({
               활발
             </span>
           )}
-          <span title="투자 포인트">📈 {totalInv}</span>
-          <span title="투자한 사람">{investorCount}명 투자 중</span>
+          <span title="발자국">👣 {totalInv}</span>
+          <span title="걸어간 사람">{investorCount}명 걸어감</span>
         </span>
       </div>
 
@@ -763,9 +763,9 @@ function SearchResultItem({
             onClick={(e) => onCultivate(e, qa.id)}
             disabled={isCultivating}
             className="shrink-0 text-xs px-3 py-1.5 rounded-full border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors disabled:opacity-50"
-            title="10포인트 투자하기"
+            title="10발자국 남기기"
           >
-            {isCultivating ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "📈 투자"}
+            {isCultivating ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "👣 발자국"}
           </button>
         )}
       </div>

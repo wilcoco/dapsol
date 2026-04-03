@@ -260,15 +260,17 @@ export function NavigableKnowledgeMap({
   const [fadeState, setFadeState] = useState<"visible" | "fading-out" | "fading-in">("visible");
   const [viewBox, setViewBox] = useState({ x: 0, y: 0, width: 1200, height: 800 });
   const viewBoxRef = useRef(viewBox);
-  viewBoxRef.current = viewBox;
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   // ── Interaction state ──
   const clusterNodesRef = useRef(clusterNodes);
-  clusterNodesRef.current = clusterNodes;
   const qaNodesRef = useRef(qaNodes);
-  qaNodesRef.current = qaNodes;
+
+  // Keep refs in sync with state values for use in callbacks
+  useEffect(() => { viewBoxRef.current = viewBox; }, [viewBox]);
+  useEffect(() => { clusterNodesRef.current = clusterNodes; }, [clusterNodes]);
+  useEffect(() => { qaNodesRef.current = qaNodes; }, [qaNodes]);
   const interactionRef = useRef<
     | { type: "drag"; nodeId: string; offsetX: number; offsetY: number; moved: boolean }
     | { type: "pan"; startX: number; startY: number; vbX: number; vbY: number }
@@ -282,9 +284,12 @@ export function NavigableKnowledgeMap({
   useEffect(() => {
     if (initialFocusId && initialFocusId !== focalId) {
       qaLoadedRef.current = null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setExploreData(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFocalId(initialFocusId);
       // Auto switch to QASet view when an external focus is set
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setZoomLevel("qaset");
     }
   }, [initialFocusId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -292,7 +297,9 @@ export function NavigableKnowledgeMap({
   // Navigate to a specific cluster when passed from home screen
   useEffect(() => {
     if (initialClusterFocusId && isActive) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setZoomLevel("cluster");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFocalClusterId(initialClusterFocusId);
     }
   }, [initialClusterFocusId, isActive]);
@@ -307,7 +314,9 @@ export function NavigableKnowledgeMap({
     if (clusterLoadedRef.current === cacheKey && clusterData) return;
 
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null);
 
     const url = focalClusterId
@@ -363,7 +372,9 @@ export function NavigableKnowledgeMap({
     if (qaLoadedRef.current === cacheKey && exploreData) return;
 
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null);
 
     const url = queryId
@@ -507,7 +518,9 @@ export function NavigableKnowledgeMap({
   // ══════════════════════════════════════════════
 
   const zoomLevelRef = useRef(zoomLevel);
-  zoomLevelRef.current = zoomLevel;
+  useEffect(() => {
+    zoomLevelRef.current = zoomLevel;
+  }, [zoomLevel]);
   const layerRef = useRef<HTMLDivElement>(null);
 
   // ── Convert client → SVG coords ──

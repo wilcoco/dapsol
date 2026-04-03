@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { Header } from "@/components/layout/header";
 import { Section1QuestionInput } from "@/components/section1/question-input";
@@ -291,8 +291,17 @@ export default function HomePage() {
 
 // ── Landing page components (non-logged-in) ──
 
+interface FeedItem {
+  id: string;
+  action: string;
+  message: string;
+  createdAt: string;
+}
+
 function LandingActivityFeed() {
-  const [feed, setFeed] = useState<any[]>([]);
+  const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+
   useEffect(() => {
     fetch("/api/activity-feed?limit=5")
       .then((r) => r.ok ? r.json() : null)
@@ -300,15 +309,26 @@ function LandingActivityFeed() {
       .catch(() => {});
   }, []);
 
-  if (feed.length === 0) return null;
+  // Update "now" periodically for time display
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const timeAgo = (iso: string) => {
-    const diff = Date.now() - new Date(iso).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "방금";
-    if (mins < 60) return `${mins}분 전`;
-    return `${Math.floor(mins / 60)}시간 전`;
-  };
+  // Memoize formatted times using the state-based "now"
+  const formattedTimes = useMemo(() => {
+    const result: Record<string, string> = {};
+    for (const item of feed) {
+      const diff = now - new Date(item.createdAt).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) result[item.id] = "방금";
+      else if (mins < 60) result[item.id] = `${mins}분 전`;
+      else result[item.id] = `${Math.floor(mins / 60)}시간 전`;
+    }
+    return result;
+  }, [feed, now]);
+
+  if (feed.length === 0) return null;
 
   const icons: Record<string, string> = { share: "📝", invest: "📈", hunt: "📉", milestone: "🏆" };
 
@@ -322,12 +342,12 @@ function LandingActivityFeed() {
         </span>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {feed.map((item: any) => (
+        {feed.map((item) => (
           <div key={item.id} className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg border bg-card text-left max-w-[260px]">
             <span className="text-base">{icons[item.action] ?? "📌"}</span>
             <div className="min-w-0">
               <p className="text-xs truncate">{item.message}</p>
-              <p className="text-[10px] text-muted-foreground">{timeAgo(item.createdAt)}</p>
+              <p className="text-[10px] text-muted-foreground">{formattedTimes[item.id]}</p>
             </div>
           </div>
         ))}
@@ -336,8 +356,16 @@ function LandingActivityFeed() {
   );
 }
 
+interface TrendingQA {
+  id: string;
+  title: string | null;
+  totalInvested: number;
+  investorCount: number;
+  creator?: { name: string | null };
+}
+
 function LandingTrending() {
-  const [qas, setQas] = useState<any[]>([]);
+  const [qas, setQas] = useState<TrendingQA[]>([]);
   useEffect(() => {
     fetch("/api/qa-sets?shared=true&sort=trending&limit=5")
       .then((r) => r.ok ? r.json() : null)
@@ -354,7 +382,7 @@ function LandingTrending() {
         <span className="text-xs text-muted-foreground">무료로 열람 · 발자국은 로그인 후</span>
       </div>
       <div className="divide-y divide-border/50">
-        {qas.map((qa: any) => (
+        {qas.map((qa) => (
           <div key={qa.id} className="py-3">
             <p className="text-sm font-medium">{qa.title ?? "제목 없음"}</p>
             <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">

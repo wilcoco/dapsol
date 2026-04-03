@@ -1173,7 +1173,7 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap, onNavigateTo
                 tooltip.node.type === "author" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300" :
                 "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300"
               }`}>
-                {{ question: "질문", answer: "답변", invest: "투자", hunt: "반대투자", opinion: "의견", author: "작성자" }[tooltip.node.type]}
+                {{ question: "질문", answer: "답변", invest: "발자국", hunt: "반대발자국", opinion: "의견", author: "작성자" }[tooltip.node.type]}
               </span>
               {tooltip.node.sublabel && (
                 <span className="text-muted-foreground">{tooltip.node.sublabel}</span>

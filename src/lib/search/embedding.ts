@@ -1,6 +1,7 @@
 import { openai } from "@ai-sdk/openai";
 import { embedMany, embed } from "ai";
 import { prisma } from "@/lib/prisma";
+import type { PrismaClient } from "@prisma/client";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const MAX_TEXT_LENGTH = 1000;
@@ -75,7 +76,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
  * Also keeps JSON string for backward compatibility
  */
 export async function saveEmbeddingToDb(
-  prisma: any,
+  prismaClient: PrismaClient,
   qaSetId: string,
   embedding: number[]
 ): Promise<void> {
@@ -83,7 +84,7 @@ export async function saveEmbeddingToDb(
   const vectorStr = `[${embedding.join(",")}]`;
 
   // Update both the JSON text field and the native vector column
-  await prisma.$executeRaw`
+  await prismaClient.$executeRaw`
     UPDATE "QASet"
     SET "embedding" = ${embeddingJson},
         "embeddingModel" = ${EMBEDDING_MODEL},
@@ -97,7 +98,7 @@ export async function saveEmbeddingToDb(
  * Returns QASet IDs with similarity scores, no 50-item limit
  */
 export async function vectorSearch(
-  prisma: any,
+  prismaClient: PrismaClient,
   queryEmbedding: number[],
   options: {
     excludeQASetId?: string;
@@ -113,7 +114,7 @@ export async function vectorSearch(
     let results: Array<{ id: string; similarity: number }>;
 
     if (excludeQASetId) {
-      results = await prisma.$queryRaw`
+      results = await prismaClient.$queryRaw`
         SELECT id, (1 - ("embeddingVec" <=> ${vectorStr}::vector)) as similarity
         FROM "QASet"
         WHERE "isShared" = true
@@ -124,7 +125,7 @@ export async function vectorSearch(
         LIMIT ${limit}
       `;
     } else {
-      results = await prisma.$queryRaw`
+      results = await prismaClient.$queryRaw`
         SELECT id, (1 - ("embeddingVec" <=> ${vectorStr}::vector)) as similarity
         FROM "QASet"
         WHERE "isShared" = true
@@ -145,7 +146,7 @@ export async function vectorSearch(
 /**
  * Check if pgvector extension and index are properly set up.
  */
-export async function checkPgvectorStatus(prisma: any): Promise<{
+export async function checkPgvectorStatus(prismaClient: PrismaClient): Promise<{
   extensionInstalled: boolean;
   columnExists: boolean;
   indexExists: boolean;
@@ -153,36 +154,36 @@ export async function checkPgvectorStatus(prisma: any): Promise<{
 }> {
   try {
     // Check extension
-    const extResult = await prisma.$queryRaw`
+    const extResult = await prismaClient.$queryRaw`
       SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector') as installed
-    `;
-    const extensionInstalled = (extResult as any)[0]?.installed ?? false;
+    ` as Array<{ installed: boolean }>;
+    const extensionInstalled = extResult[0]?.installed ?? false;
 
     // Check column
-    const colResult = await prisma.$queryRaw`
+    const colResult = await prismaClient.$queryRaw`
       SELECT EXISTS(
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'QASet' AND column_name = 'embeddingVec'
       ) as exists
-    `;
-    const columnExists = (colResult as any)[0]?.exists ?? false;
+    ` as Array<{ exists: boolean }>;
+    const columnExists = colResult[0]?.exists ?? false;
 
     // Check index
-    const idxResult = await prisma.$queryRaw`
+    const idxResult = await prismaClient.$queryRaw`
       SELECT EXISTS(
         SELECT 1 FROM pg_indexes
         WHERE tablename = 'QASet' AND indexname = 'idx_qaset_embedding'
       ) as exists
-    `;
-    const indexExists = (idxResult as any)[0]?.exists ?? false;
+    ` as Array<{ exists: boolean }>;
+    const indexExists = idxResult[0]?.exists ?? false;
 
     // Count vectors
     let vectorCount = 0;
     if (columnExists) {
-      const countResult = await prisma.$queryRaw`
+      const countResult = await prismaClient.$queryRaw`
         SELECT COUNT(*)::int as count FROM "QASet" WHERE "embeddingVec" IS NOT NULL
-      `;
-      vectorCount = (countResult as any)[0]?.count ?? 0;
+      ` as Array<{ count: number }>;
+      vectorCount = countResult[0]?.count ?? 0;
     }
 
     return { extensionInstalled, columnExists, indexExists, vectorCount };

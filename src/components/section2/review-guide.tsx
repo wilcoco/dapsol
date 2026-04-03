@@ -491,7 +491,7 @@ export function ReviewGuide({
         {/* Progress */}
         <JourneyStepper step={journeyStep} />
 
-        {/* 투자 현황 */}
+        {/* 발자국 현황 */}
         <InvestStats
           investorCount={investorCount}
           totalInvested={totalInvested}
@@ -499,7 +499,7 @@ export function ReviewGuide({
           negativeInvested={negativeInvested}
         />
 
-        {/* ── 투자 행동 ── */}
+        {/* ── 발자국 행동 ── */}
         {isOwner ? (
           !myInvestment ? (
             <div className="relative overflow-hidden rounded-2xl border-2 border-amber-200 dark:border-amber-800 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 p-5">

@@ -271,7 +271,7 @@ INSTRUCTIONS FOR KNOWLEDGE GAPS:
               provider: "anthropic",
               model: "claude-sonnet-4-20250514",
               purpose: "chat",
-              inputTokens: Math.ceil(finalSystem.length / 4 + transformedMessages.reduce((s: number, m: any) => s + (m.content?.length ?? 0), 0) / 4),
+              inputTokens: Math.ceil(finalSystem.length / 4 + transformedMessages.reduce((s: number, m: { content?: string | object[] }) => s + (typeof m.content === "string" ? m.content.length : 0), 0) / 4),
               outputTokens: Math.ceil(fullContent.length / 4),
               durationMs: Date.now() - llmStartTime,
             });

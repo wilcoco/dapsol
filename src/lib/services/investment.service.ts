@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   calculateHubWeightedDistribution,
   calculateEffectiveAmount,
@@ -516,7 +517,7 @@ async function distributeNegativeRewardsToInvestors(
 ): Promise<void> {
   if (rewards.length === 0) return;
 
-  const rewardOps: any[] = [];
+  const rewardOps: Prisma.PrismaPromise<unknown>[] = [];
   for (const reward of rewards) {
     rewardOps.push(prisma.user.update({
       where: { id: reward.recipientId }, data: { balance: { increment: reward.amount } },
@@ -582,7 +583,7 @@ async function handlePositiveMilestone(
   if (!poolRelease || poolRelease.releasedAmount <= 0) return null;
 
   // Release pool
-  const releaseOps: any[] = [
+  const releaseOps: Prisma.PrismaPromise<unknown>[] = [
     prisma.qASet.update({ where: { id: qaSetId }, data: { qualityPool: { decrement: poolRelease.releasedAmount } } }),
     ...poolRelease.stakeholderRewards.map((inv) =>
       prisma.user.update({ where: { id: inv.recipientId }, data: { balance: { increment: inv.amount } } }),
@@ -652,7 +653,7 @@ async function handleNegativeMilestone(
 
   if (investorRewards.length === 0) return null;
 
-  const releaseOps: any[] = [
+  const releaseOps: Prisma.PrismaPromise<unknown>[] = [
     prisma.qASet.update({ where: { id: qaSetId }, data: { negativePool: { decrement: releasedAmount } } }),
     ...investorRewards.map((r) =>
       prisma.user.update({ where: { id: r.recipientId }, data: { balance: { increment: r.amount } } }),
@@ -773,7 +774,7 @@ function sendPositiveNotifications(
   rewards: RewardDistribution[], investmentId: string,
 ): void {
   const investorName = user.name ?? "익명";
-  const notifs: Promise<any>[] = [];
+  const notifs: Promise<unknown>[] = [];
 
   if (input.userId !== qaSet.creatorId) {
     notifs.push(createNotification({
@@ -801,7 +802,7 @@ function sendNegativeNotifications(
   rewards: RewardDistribution[], investmentId: string,
 ): void {
   const investorName = user.name ?? "익명";
-  const notifs: Promise<any>[] = [];
+  const notifs: Promise<unknown>[] = [];
 
   notifs.push(createNotification({
     userId: qaSet.creatorId, type: "hunt_received",

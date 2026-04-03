@@ -39,12 +39,12 @@ export function Header() {
         {/* User area */}
         {session?.user ? (
           <div className="flex items-center gap-3">
-            {/* Hub score (투자 안목) */}
+            {/* Hub score (발굴 안목) */}
             {session.user.hubScore != null && (
               <Badge
                 variant="outline"
                 className="font-mono text-xs border-amber-300 text-amber-700 dark:text-amber-400 dark:border-amber-700"
-                title="Hub 점수 — 좋은 Q&A를 먼저 발굴하여 보상을 받을수록 상승. 높을수록 같은 투자금으로 더 큰 지분 확보"
+                title="Hub 점수 — 좋은 길을 먼저 발굴하여 보상을 받을수록 상승. 같은 발자국으로 더 큰 지분 확보"
               >
                 <HubIcon size={14} className="mr-0.5" /> {(session.user.hubScore as number).toFixed(2)}
               </Badge>
@@ -55,7 +55,7 @@ export function Header() {
               <Badge
                 variant="outline"
                 className="font-mono text-xs border-blue-300 text-blue-700 dark:text-blue-400 dark:border-blue-700"
-                title="Authority 점수 — 내 Q&A에 다른 사람들이 투자할수록 상승. 높을수록 품질 풀 보상 유리"
+                title="Authority 점수 — 내 길에 다른 사람들이 걸어갈수록 상승. 높을수록 품질 풀 보상 유리"
               >
                 <AuthorityIcon size={14} className="mr-0.5" /> {session.user.authorityScore!.toFixed(2)}
               </Badge>
