@@ -278,6 +278,7 @@ function GapFiller({
   userBalance = 100,
   originalQuestion = "",
   originalAnswer = "",
+  userId,
 }: {
   qaSetId: string;
   onSubmitted: () => void;
@@ -285,6 +286,7 @@ function GapFiller({
   userBalance?: number;
   originalQuestion?: string;
   originalAnswer?: string;
+  userId?: string;
 }) {
   const [selectedGap, setSelectedGap] = useState<string | null>(null);
   const [customGapType, setCustomGapType] = useState("");
@@ -296,8 +298,47 @@ function GapFiller({
   const [resultReward, setResultReward] = useState(0);
   const [aiEvaluation, setAiEvaluation] = useState<AIEvaluation | null>(null);
   const [aiInvestment, setAiInvestment] = useState(0);
+  const [existingOpinions, setExistingOpinions] = useState<Opinion[]>([]);
+  const [investing, setInvesting] = useState<string | null>(null);
 
   const maxConfidence = Math.min(userBalance, 100);
+
+  // 기존 빈틈 채우기 로드
+  useEffect(() => {
+    fetch(`/api/opinions?qaSetId=${qaSetId}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d?.opinions) setExistingOpinions(d.opinions);
+      })
+      .catch(() => {});
+  }, [qaSetId]);
+
+  // 의견에 투자
+  const handleInvestOpinion = async (opinionId: string) => {
+    if (!userId || investing) return;
+    setInvesting(opinionId);
+    try {
+      const res = await fetch(`/api/opinions/${opinionId}/invest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: 10 }),
+      });
+      if (res.ok) {
+        setExistingOpinions((prev) =>
+          prev.map((op) =>
+            op.id === opinionId
+              ? { ...op, totalInvested: op.totalInvested + 10, investorCount: op.investorCount + 1, myInvestment: 10 }
+              : op
+          )
+        );
+        onSubmitted();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setInvesting(null);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!selectedGap || submitting) return;
@@ -481,6 +522,44 @@ function GapFiller({
           +25 👣
         </Badge>
       </div>
+
+      {/* 기존 빈틈 채우기 (있으면 표시) */}
+      {existingOpinions.length > 0 && (
+        <div className="p-3 rounded-xl bg-muted/50 border space-y-2">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <span>💬</span>
+            <span>이미 채워진 빈틈 {existingOpinions.length}개</span>
+          </div>
+          <div className="space-y-1.5 max-h-32 overflow-y-auto">
+            {existingOpinions.map((op) => (
+              <div key={op.id} className="p-2 rounded-lg bg-background border text-xs space-y-1">
+                <p className="text-foreground/90 line-clamp-2">{op.content}</p>
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <span>{op.user.name ?? "익명"}</span>
+                    {op.aiInvestment && op.aiInvestment > 0 && (
+                      <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400 border-0 text-[9px] px-1">
+                        🤖 인정
+                      </Badge>
+                    )}
+                    <span>👣{op.totalInvested}</span>
+                  </div>
+                  {userId && op.user.id !== userId && !op.myInvestment && userBalance >= 10 && (
+                    <button
+                      onClick={() => handleInvestOpinion(op.id)}
+                      disabled={investing === op.id}
+                      className="px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-medium"
+                    >
+                      {investing === op.id ? "..." : "+10👣"}
+                    </button>
+                  )}
+                  {op.myInvestment && <span className="text-green-600">✓</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Gap Type Selection */}
       <div className="flex flex-wrap gap-1.5">
@@ -709,6 +788,7 @@ export function ReviewGuide({
             onSubmitted={onOpinionSubmitted}
             onShareQA={onShareQA}
             userBalance={userBalance}
+            userId={userId}
             originalQuestion={qaSet.messages?.find(m => m.role === "user")?.content ?? qaSet.title ?? ""}
             originalAnswer={qaSet.messages?.filter(m => m.role === "assistant").map(m => m.content).join("\n") ?? ""}
           />
@@ -828,6 +908,7 @@ export function ReviewGuide({
           onSubmitted={onOpinionSubmitted}
           onShareQA={onShareQA}
           userBalance={userBalance}
+          userId={userId}
           originalQuestion={qaSet.messages?.find(m => m.role === "user")?.content ?? qaSet.title ?? ""}
           originalAnswer={qaSet.messages?.filter(m => m.role === "assistant").map(m => m.content).join("\n") ?? ""}
         />
