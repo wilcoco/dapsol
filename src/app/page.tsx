@@ -5,14 +5,14 @@ import { useSession } from "next-auth/react";
 import { Header } from "@/components/layout/header";
 import { Section1QuestionInput } from "@/components/section1/question-input";
 import { Section2Workspace } from "@/components/section2/qa-workspace";
-import { NavigableKnowledgeMap } from "@/components/section5/navigable-knowledge-map";
+// import { NavigableKnowledgeMap } from "@/components/section5/navigable-knowledge-map"; // 지도 기능 임시 비활성화
 import { MyDashboard } from "@/components/section4/my-dashboard";
 import { AnswerGaps } from "@/components/section4/answer-gaps";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import type { QASetWithMessages } from "@/types/qa-set";
 
-type ActiveTab = "home" | "map" | "profile";
+type ActiveTab = "home" | "profile";
 
 export default function HomePage() {
   const { data: session, status, update: updateSession } = useSession();
@@ -20,7 +20,6 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("home");
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [humanAnswerMode, setHumanAnswerMode] = useState(false);
-  const [clusterFocusId, setClusterFocusId] = useState<string | null>(null);
 
   // URL parameter support
   useEffect(() => {
@@ -28,8 +27,6 @@ export default function HomePage() {
     const section = params.get("section");
     if (section === "home" || section === "feed" || section === "territory" || section === "section1" || section === "conversation" || section === "ask" || section === "pioneer" || section === "answer") {
       setActiveTab("home");
-    } else if (section === "map" || section === "explore" || section === "section3" || section === "section5") {
-      setActiveTab("map");
     } else if (section === "profile" || section === "activity" || section === "section4") {
       setActiveTab("profile");
     }
@@ -173,7 +170,6 @@ export default function HomePage() {
 
   const tabs: { key: ActiveTab; label: string; icon: string }[] = [
     { key: "home", label: "길", icon: "👣" },
-    { key: "map", label: "지도", icon: "🗺️" },
     { key: "profile", label: "나", icon: "👤" },
   ];
 
@@ -215,11 +211,6 @@ export default function HomePage() {
                 onNewQuestion={handleNewQuestion}
                 onSelectSharedQA={handleSelectSharedQA}
                 onAnswerGap={handleAnswerGap}
-                onNavigateToMap={() => setActiveTab("map")}
-                onNavigateToCluster={(clusterId) => {
-                  setClusterFocusId(clusterId);
-                  setActiveTab("map");
-                }}
               />
             </div>
             {activeQASet && (
@@ -236,16 +227,6 @@ export default function HomePage() {
               </div>
             )}
           </div>
-        </div>
-
-        {/* 🗺️ 지도: 3-level 줌 지식 그래프 */}
-        <div className={activeTab === "map" ? "block h-full" : "hidden"}>
-          <NavigableKnowledgeMap
-            initialFocusId={activeQASet?.id}
-            initialClusterFocusId={clusterFocusId}
-            onSelectQASet={(id) => { handleSelectSharedQA(id); setActiveTab("home"); }}
-            isActive={activeTab === "map"}
-          />
         </div>
 
         {/* 👤 나: 대시보드 + 기여 요청(AI→인간 갭) */}

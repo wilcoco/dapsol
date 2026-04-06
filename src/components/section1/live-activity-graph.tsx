@@ -54,8 +54,6 @@ interface ClusterHalo {
 
 interface LiveActivityGraphProps {
   onSelectQASet: (qaSetId: string) => void;
-  onNavigateToMap?: () => void;
-  onNavigateToCluster?: (clusterId: string) => void;
   /** When set, only show nodes belonging to these QASet IDs */
   filterQASetIds?: string[];
 }
@@ -493,7 +491,7 @@ function computeBfsOrder(
 
 // ─── Component ───
 
-export function LiveActivityGraph({ onSelectQASet, onNavigateToMap, onNavigateToCluster, filterQASetIds }: LiveActivityGraphProps) {
+export function LiveActivityGraph({ onSelectQASet, filterQASetIds }: LiveActivityGraphProps) {
   const [rawNodes, setRawNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [clusters, setClusters] = useState<ClusterInfo[]>([]);
@@ -780,12 +778,7 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap, onNavigateTo
       const node = nodeMap.get(drag.nodeId);
       if (node) onSelectQASet(node.qaSetId);
     }
-    if (!drag.moved && drag.isCluster && onNavigateToCluster) {
-      if (drag.nodeId !== "__unclustered__") {
-        onNavigateToCluster(drag.nodeId);
-      }
-    }
-  }, [nodeMap, onSelectQASet, onNavigateToCluster]);
+  }, [nodeMap, onSelectQASet]);
 
   const handleMouseEnter = useCallback(
     (node: LayoutNode, e: React.MouseEvent) => {
@@ -849,11 +842,6 @@ export function LiveActivityGraph({ onSelectQASet, onNavigateToMap, onNavigateTo
             {qaSetCount}개 Q&A · {layoutNodes.length}개 노드
           </span>
         </div>
-        {onNavigateToMap && (
-          <button onClick={onNavigateToMap} className="text-xs text-primary hover:underline">
-            지식 지도에서 탐색 →
-          </button>
-        )}
       </div>
 
       {/* Legend */}

@@ -14,8 +14,6 @@ interface Section1Props {
   onNewQuestion: (question: string) => void;
   onSelectSharedQA: (qaSetId: string) => void;
   onAnswerGap?: (gapId: string, description: string) => void;
-  onNavigateToMap?: () => void;
-  onNavigateToCluster?: (clusterId: string) => void;
 }
 
 interface SearchState {
@@ -42,7 +40,7 @@ interface TagItem {
   count: number;
 }
 
-export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswerGap, onNavigateToMap, onNavigateToCluster }: Section1Props) {
+export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswerGap }: Section1Props) {
   const { data: session } = useSession();
   const [question, setQuestion] = useState("");
   const [trendingQAs, setTrendingQAs] = useState<QASetCardData[]>([]);
@@ -280,8 +278,6 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
               {/* 검색 결과에 해당하는 노드만 지식 네트워크에 표시 */}
               <LiveActivityGraph
                 onSelectQASet={onSelectSharedQA}
-                onNavigateToMap={onNavigateToMap}
-                onNavigateToCluster={onNavigateToCluster}
                 filterQASetIds={search.results.map((r) => r.id)}
               />
               <div className="flex items-center justify-between mb-2">
@@ -401,8 +397,6 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
               {/* ── Section 0: Live Activity Graph (노드+링크 순차 발현) ── */}
               <LiveActivityGraph
                 onSelectQASet={onSelectSharedQA}
-                onNavigateToMap={onNavigateToMap}
-                onNavigateToCluster={onNavigateToCluster}
               />
 
               {/* ── Cluster Filter Chips ── */}
