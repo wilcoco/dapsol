@@ -102,22 +102,30 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ...opinion, reward, investment });
 }
 
-// GET /api/opinions?messageId=xxx - Get opinions for a message
+// GET /api/opinions?messageId=xxx or ?qaSetId=xxx - Get opinions
 export async function GET(req: NextRequest) {
+  const session = await auth();
   const { searchParams } = new URL(req.url);
   const messageId = searchParams.get("messageId");
+  const qaSetId = searchParams.get("qaSetId");
 
-  if (!messageId) {
-    return NextResponse.json({ error: "messageId required" }, { status: 400 });
+  if (!messageId && !qaSetId) {
+    return NextResponse.json({ error: "messageId or qaSetId required" }, { status: 400 });
   }
 
   const relations = await prisma.nodeRelation.findMany({
-    where: { targetMessageId: messageId },
+    where: messageId
+      ? { targetMessageId: messageId }
+      : { targetQASetId: qaSetId },
     include: {
       sourceOpinion: {
         include: {
           user: {
             select: { id: true, name: true, image: true },
+          },
+          investments: {
+            where: { isActive: true },
+            select: { amount: true, userId: true },
           },
         },
       },
@@ -125,16 +133,37 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
 
+  // 시스템 AI 사용자 ID 조회
+  const systemUser = await prisma.user.findFirst({
+    where: { isSystemAI: true },
+    select: { id: true },
+  });
+
   const opinions = relations
     .filter((r) => r.sourceOpinion)
-    .map((r) => ({
-      id: r.sourceOpinion!.id,
-      content: r.sourceOpinion!.content,
-      contentHtml: r.sourceOpinion!.contentHtml,
-      relationType: r.relationType,
-      user: r.sourceOpinion!.user,
-      createdAt: r.sourceOpinion!.createdAt,
-    }));
+    .map((r) => {
+      const op = r.sourceOpinion!;
+      const totalInvested = op.investments.reduce((sum, i) => sum + i.amount, 0);
+      const aiInvestment = systemUser
+        ? op.investments.find(i => i.userId === systemUser.id)?.amount ?? 0
+        : 0;
+      const myInvestment = session?.user?.id
+        ? op.investments.find(i => i.userId === session.user.id)?.amount
+        : undefined;
 
-  return NextResponse.json(opinions);
+      return {
+        id: op.id,
+        content: op.content,
+        contentHtml: op.contentHtml,
+        relationType: r.relationType,
+        user: op.user,
+        createdAt: op.createdAt,
+        totalInvested,
+        investorCount: op.investments.length,
+        aiInvestment,
+        myInvestment,
+      };
+    });
+
+  return NextResponse.json({ opinions });
 }
