@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Search, Loader2, TrendingUp, ExternalLink, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { QASetCardData, ScoreDetail } from "@/types/qa-set";
-import { LiveActivityGraph } from "@/components/section1/live-activity-graph";
+// import { LiveActivityGraph } from "@/components/section1/live-activity-graph"; // 임시 비활성화
 import { MyStatus } from "@/components/section1/my-status";
 
 interface Section1Props {
@@ -275,11 +275,6 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
           {/* ══════ Search Results ══════ */}
           {search && (
             <div>
-              {/* 검색 결과에 해당하는 노드만 지식 네트워크에 표시 */}
-              <LiveActivityGraph
-                onSelectQASet={onSelectSharedQA}
-                filterQASetIds={search.results.map((r) => r.id)}
-              />
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">&ldquo;{search.query}&rdquo;</span>{" "}
@@ -393,11 +388,6 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
           {/* ══════ Home Feed (Julie Zhuo layout) ══════ */}
           {showTrending && (
             <div>
-
-              {/* ── Section 0: Live Activity Graph (노드+링크 순차 발현) ── */}
-              <LiveActivityGraph
-                onSelectQASet={onSelectSharedQA}
-              />
 
               {/* ── Cluster Filter Chips ── */}
               {popularTags.length > 0 && (
