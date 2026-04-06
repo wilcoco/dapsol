@@ -46,6 +46,12 @@ export async function GET(req: NextRequest) {
                   id: true,
                   title: true,
                   isShared: true,
+                  messages: {
+                    where: { role: "assistant" },
+                    take: 1,
+                    orderBy: { createdAt: "asc" },
+                    select: { content: true },
+                  },
                 },
               },
             },
@@ -76,6 +82,7 @@ export async function GET(req: NextRequest) {
           id: qaSet.id,
           title: qaSet.title,
           isShared: qaSet.isShared,
+          aiAnswer: qaSet.messages?.[0]?.content ?? null,
         } : null,
       };
     });

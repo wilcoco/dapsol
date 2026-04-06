@@ -4,8 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Search, Loader2, TrendingUp, ExternalLink, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Search, Loader2, TrendingUp, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { QASetCardData, ScoreDetail } from "@/types/qa-set";
 // import { LiveActivityGraph } from "@/components/section1/live-activity-graph"; // 임시 비활성화
 import { MyStatus } from "@/components/section1/my-status";
@@ -67,7 +66,7 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
     aiInvestment: number;
     totalInvested: number;
     investorCount: number;
-    qaSet: { id: string; title: string | null; isShared: boolean } | null;
+    qaSet: { id: string; title: string | null; isShared: boolean; aiAnswer: string | null } | null;
   }>>([]);
   const [cultivatingId, setCultivatingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -239,38 +238,39 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
   return (
     <div className="flex flex-col h-full overflow-hidden relative pb-14 md:pb-0">
 
-      {/* ── Header: Search bar (검색 우선 — Enter로 바로 검색) ── */}
-      <div className={`shrink-0 border-b bg-muted/20 transition-all duration-300 ${search ? "px-6 py-3" : "px-6 py-6"}`}>
+      {/* ── Header: Search bar (컴팩트) ── */}
+      <div className={`shrink-0 border-b bg-muted/20 transition-all duration-300 ${search ? "px-4 py-2" : "px-4 py-4"}`}>
         <div className="max-w-2xl mx-auto">
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none z-10" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
             <Input
               ref={inputRef}
-              placeholder="검증된 답변을 검색하세요..."
+              placeholder="AI 답변 검색..."
               value={question}
               onChange={(e) => {
                 setQuestion(e.target.value);
                 if (search && e.target.value.trim() !== search.query) setSearch(null);
               }}
               onKeyDown={handleKeyDown}
-              className="text-lg h-14 pl-12 pr-28 rounded-2xl shadow-sm border-2 focus-visible:ring-0 focus-visible:border-primary"
+              className="text-base h-11 pl-10 pr-20 rounded-xl shadow-sm border focus-visible:ring-0 focus-visible:border-primary"
               disabled={isSubmitting}
             />
             <Button
               onClick={() => handleSearch(1)}
               disabled={!question.trim() || isSearching}
-              className="absolute right-2 top-1/2 -translate-y-1/2 h-10 rounded-xl gap-1.5 text-sm px-4"
+              size="sm"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 rounded-lg gap-1 text-xs px-3"
             >
-              {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              {isSearching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
               검색
             </Button>
           </div>
         </div>
       </div>
 
-      {/* ── Content Area ── */}
+      {/* ── Content Area (컴팩트) ── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-6 py-5">
+        <div className="max-w-2xl mx-auto px-3 py-2">
 
           {/* ══════ Search Results ══════ */}
           {search && (
@@ -320,49 +320,44 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                     <Pagination search={search} onPage={handlePage} />
                   )}
 
-                  {/* 검색 결과 하단: 새 길 만들기 유도 */}
-                  <div className="mt-6 pt-4 border-t text-center space-y-2">
-                    <p className="text-sm text-muted-foreground">원하는 답변이 없나요?</p>
+                  {/* 검색 결과 하단: 새 길 만들기 (컴팩트) */}
+                  <div className="mt-4 pt-3 border-t text-center">
                     <Button
                       onClick={handleAskAI}
                       disabled={isSubmitting}
                       variant="outline"
-                      className="gap-2"
+                      size="sm"
+                      className="gap-1.5 text-xs"
                     >
-                      {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "🏔️"}
-                      &ldquo;{search.query}&rdquo; 새 길 만들기
+                      {isSubmitting ? <Loader2 className="h-3 w-3 animate-spin" /> : "🏔️"}
+                      새 길 만들기
                     </Button>
-                    <p className="text-xs text-muted-foreground">
-                      개척 시 +10 발자국, AI 답변 시 +5 발자국
-                    </p>
                   </div>
                 </>
               ) : (
-                /* 검색 결과 0건: 개척자 화면 */
-                <div className="text-center py-10 space-y-6">
-                  <div className="space-y-2">
-                    <div className="text-5xl mb-4">🏔️</div>
-                    <h3 className="text-xl font-bold">아직 아무도 걷지 않은 눈</h3>
-                    <p className="text-sm text-muted-foreground">
+                /* 검색 결과 0건: 개척자 화면 (컴팩트) */
+                <div className="text-center py-6 space-y-4">
+                  <div className="space-y-1">
+                    <div className="text-3xl">🏔️</div>
+                    <h3 className="text-base font-bold">아직 아무도 걷지 않은 눈</h3>
+                    <p className="text-xs text-muted-foreground">
                       &ldquo;{search.query}&rdquo;에 대한 길이 없습니다
                     </p>
                   </div>
 
-                  <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 rounded-2xl p-6 border-2 border-amber-200 dark:border-amber-800 max-w-sm mx-auto">
-                    <div className="text-2xl mb-2">🏅</div>
-                    <h4 className="font-bold text-lg mb-2">개척자가 되세요</h4>
-                    <div className="space-y-2 text-sm text-left">
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-600 font-bold">+10</span>
-                        <span>발자국 즉시 지급</span>
+                  <div className="bg-amber-50/50 dark:bg-amber-950/20 rounded-xl p-4 border border-amber-200/50 dark:border-amber-800/30 max-w-xs mx-auto">
+                    <div className="flex items-center justify-center gap-4 text-xs">
+                      <div className="text-center">
+                        <span className="text-green-600 font-bold block">+10</span>
+                        <span className="text-muted-foreground">개척</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-600 font-bold">+5</span>
-                        <span>AI 답변 생성 시 추가</span>
+                      <div className="text-center">
+                        <span className="text-green-600 font-bold block">+5</span>
+                        <span className="text-muted-foreground">AI답변</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-amber-600">👣</span>
-                        <span>뒤따라오는 사람마다 보상</span>
+                      <div className="text-center">
+                        <span className="text-amber-600 block">👣</span>
+                        <span className="text-muted-foreground">후속보상</span>
                       </div>
                     </div>
                   </div>
@@ -370,10 +365,9 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                   <Button
                     onClick={handleAskAI}
                     disabled={isSubmitting}
-                    size="lg"
-                    className="gap-2 text-base bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                    className="gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
                   >
-                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "🏔️"}
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "🏔️"}
                     첫 발자국 남기기
                   </Button>
 
@@ -389,12 +383,12 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
           {showTrending && (
             <div>
 
-              {/* ── Cluster Filter Chips ── */}
+              {/* ── Cluster Filter Chips (컴팩트) ── */}
               {popularTags.length > 0 && (
-                <div className="flex items-center gap-1.5 mb-5 overflow-x-auto pb-1 scrollbar-hide">
+                <div className="flex items-center gap-1 mb-3 overflow-x-auto pb-1 scrollbar-hide">
                   <button
                     onClick={() => setActiveTag(null)}
-                    className={`shrink-0 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    className={`shrink-0 text-[10px] px-2 py-1 rounded-full border transition-colors ${
                       activeTag === null
                         ? "bg-primary text-primary-foreground border-primary"
                         : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
@@ -406,59 +400,45 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                     <button
                       key={tag.id}
                       onClick={() => setActiveTag(activeTag === tag.name ? null : tag.name)}
-                      className={`shrink-0 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      className={`shrink-0 text-[10px] px-2 py-1 rounded-full border transition-colors ${
                         activeTag === tag.name
                           ? "bg-primary text-primary-foreground border-primary"
                           : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
                       }`}
                     >
                       {tag.name}
-                      <span className="ml-1 opacity-60">{tag.count}</span>
+                      <span className="ml-0.5 opacity-60">{tag.count}</span>
                     </button>
                   ))}
                 </div>
               )}
 
-              {/* ── 🌱 새로 열린 길 (48시간 이내) ── */}
+              {/* ── 🌱 새로 열린 길 (48시간 이내, 컴팩트) ── */}
               {seedlingQAs.length > 0 && (
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-base">🌱</span>
-                    <h3 className="text-sm font-semibold">새로 열린 길</h3>
-                    <span className="text-[10px] text-muted-foreground">48시간 이내 · 먼저 걸어가세요</span>
+                <div className="mb-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="text-sm">🌱</span>
+                    <h3 className="text-xs font-semibold">새로 열린 길</h3>
+                    <span className="text-[9px] text-muted-foreground">48h 이내</span>
                   </div>
-                  <div className="space-y-1">
+                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
                     {seedlingQAs.map((qa) => (
                       <div
                         key={qa.id}
-                        className="group flex items-center gap-3 py-2.5 px-3 -mx-3 rounded-lg cursor-pointer hover:bg-green-50/50 dark:hover:bg-green-950/20 transition-colors"
+                        className="shrink-0 w-[200px] p-2.5 rounded-lg border bg-green-50/30 dark:bg-green-950/10 border-green-200/50 dark:border-green-800/30 cursor-pointer hover:border-green-400 dark:hover:border-green-600 transition-colors"
                         onClick={() => onSelectSharedQA(qa.id)}
                       >
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400 font-medium shrink-0">🆕</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
-                            {qa.title ?? "제목 없음"}
-                          </p>
-                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
-                            <span>{qa.creator?.name ?? "익명"}</span>
-                            {qa.investorCount === 0 && (
-                              <span className="text-amber-600 dark:text-amber-400 font-medium">아직 아무도 안 걸어감</span>
-                            )}
-                            {qa.tags && qa.tags.length > 0 && (
-                              <span>· {qa.tags[0].tag.name}</span>
-                            )}
-                          </div>
+                        <p className="text-xs font-medium line-clamp-2 leading-snug mb-1">
+                          {qa.title ?? "제목 없음"}
+                        </p>
+                        <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+                          <span>{qa.creator?.name ?? "익명"}</span>
+                          {qa.investorCount === 0 ? (
+                            <span className="text-amber-600 dark:text-amber-400">첫 발자국 가능</span>
+                          ) : (
+                            <span>👣 {qa.investorCount}</span>
+                          )}
                         </div>
-                        {session?.user?.id && (
-                          <button
-                            onClick={(e) => handleQuickCultivate(e, qa.id)}
-                            disabled={cultivatingId === qa.id}
-                            className="shrink-0 text-xs px-2.5 py-1 rounded-full border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/50 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-50"
-                            title="먼저 걸어가기"
-                          >
-                            {cultivatingId === qa.id ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "👣 걸어가기"}
-                          </button>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -468,37 +448,48 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
               {/* ── E. 개인 상태 — "👤 나의 현황" (Yu-kai Chou Drive 1+5) ── */}
               <MyStatus />
 
-              {/* ── 🎯 AI가 인정한 정보 ── */}
+              {/* ── 🎯 AI가 인정한 정보 (Q→A→수정 구조) ── */}
               {aiApprovedOpinions.length > 0 && (
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-base">🎯</span>
-                    <h3 className="text-sm font-semibold">AI가 인정한 정보</h3>
-                    <span className="text-[10px] text-muted-foreground">사용자가 발견한 AI 빈틈</span>
+                <div className="mb-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="text-sm">🎯</span>
+                    <h3 className="text-xs font-semibold">AI가 인정한 정보</h3>
                   </div>
                   <div className="space-y-2">
                     {aiApprovedOpinions.map((opinion) => (
                       <div
                         key={opinion.id}
-                        className="group p-3 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/20 hover:border-amber-300 dark:hover:border-amber-700 transition-colors cursor-pointer"
+                        className="p-2.5 rounded-lg border border-amber-200/50 dark:border-amber-800/30 bg-amber-50/30 dark:bg-amber-950/10 hover:border-amber-300 dark:hover:border-amber-700 transition-colors cursor-pointer"
                         onClick={() => opinion.qaSet && onSelectSharedQA(opinion.qaSet.id)}
                       >
-                        <p className="text-sm line-clamp-2 mb-2">{opinion.content}</p>
-                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                          <div className="flex items-center gap-2">
-                            <span>{opinion.user.name ?? "익명"}</span>
-                            {opinion.qaSet && (
-                              <span className="truncate max-w-[150px]">· {opinion.qaSet.title ?? "Q&A"}</span>
-                            )}
+                        {/* Q: 질문 */}
+                        {opinion.qaSet?.title && (
+                          <div className="flex items-start gap-1.5 mb-1.5">
+                            <span className="shrink-0 w-4 h-4 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-[8px]">👤</span>
+                            <p className="text-[11px] text-foreground line-clamp-1 flex-1">{opinion.qaSet.title}</p>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-amber-600 dark:text-amber-400 font-medium">
-                              AI 👣{opinion.aiInvestment}
-                            </span>
-                            {opinion.investorCount > 1 && (
-                              <span>+{opinion.investorCount - 1}명 동의</span>
-                            )}
+                        )}
+                        {/* A: AI 답변 */}
+                        {opinion.qaSet?.aiAnswer && (
+                          <div className="flex items-start gap-1.5 mb-1.5">
+                            <span className="shrink-0 w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-[8px]">🤖</span>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1 flex-1">{opinion.qaSet.aiAnswer}</p>
                           </div>
+                        )}
+                        {/* 수정: 사용자 빈틈 채우기 */}
+                        <div className="flex items-start gap-1.5">
+                          {opinion.user.image ? (
+                            <img src={opinion.user.image} alt="" className="shrink-0 w-4 h-4 rounded-full" />
+                          ) : (
+                            <span className="shrink-0 w-4 h-4 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center text-[8px]">✏️</span>
+                          )}
+                          <p className="text-[11px] text-amber-700 dark:text-amber-400 line-clamp-1 flex-1 font-medium">{opinion.content}</p>
+                        </div>
+                        {/* 메타 */}
+                        <div className="flex items-center gap-2 text-[9px] text-muted-foreground mt-1.5 pl-5">
+                          <span>{opinion.user.name ?? "익명"}</span>
+                          <span className="text-amber-600 dark:text-amber-400 font-medium">AI 👣{opinion.aiInvestment}</span>
+                          {opinion.investorCount > 1 && <span>+{opinion.investorCount - 1}명 동의</span>}
                         </div>
                       </div>
                     ))}
@@ -506,21 +497,21 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                 </div>
               )}
 
-              {/* ── 🔥 인기 있는 길 ── */}
+              {/* ── 🔥 인기 있는 길 (컴팩트) ── */}
               {trendingQAs.length > 0 ? (
                 <>
-                  <div className="flex items-center gap-2 mb-4">
-                    <TrendingUp className="h-4 w-4 text-orange-500" />
-                    <h3 className="text-sm font-semibold">인기 있는 길</h3>
-                    <span className="text-xs text-muted-foreground">
-                      {activeTag ? `"${activeTag}" 태그` : "많은 사람이 걸어간 길"}
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <TrendingUp className="h-3.5 w-3.5 text-orange-500" />
+                    <h3 className="text-xs font-semibold">인기 있는 길</h3>
+                    <span className="text-[9px] text-muted-foreground">
+                      {activeTag ? `#${activeTag}` : ""}
                     </span>
                     {activeTag && (
                       <button
                         onClick={() => setActiveTag(null)}
-                        className="text-xs text-muted-foreground hover:text-foreground ml-auto"
+                        className="text-[9px] text-muted-foreground hover:text-foreground ml-auto"
                       >
-                        ✕ 필터 해제
+                        ✕
                       </button>
                     )}
                   </div>
@@ -548,19 +539,15 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                   </button>
                 </div>
               ) : (
-                <div className="text-center py-16 text-muted-foreground space-y-4">
-                  <div className="text-5xl">👣</div>
-                  <p className="font-medium text-base">검증된 답변을 검색하세요</p>
-                  <p className="text-sm text-muted-foreground/70 max-w-sm mx-auto leading-relaxed">
-                    이미 열린 길이 있다면 따라가고,<br />
-                    없다면 새 길을 개척하세요.
-                  </p>
-                  <div className="flex flex-wrap gap-2 justify-center max-w-md mx-auto pt-2">
-                    {["효과적인 코드 리뷰 방법", "마케팅 전략 수립", "팀 회고 진행법", "데이터 분석 기초", "프로젝트 관리 팁"].map((example) => (
+                <div className="text-center py-8 text-muted-foreground space-y-3">
+                  <div className="text-3xl">👣</div>
+                  <p className="font-medium text-sm">검증된 답변을 검색하세요</p>
+                  <div className="flex flex-wrap gap-1.5 justify-center max-w-sm mx-auto">
+                    {["코드 리뷰", "마케팅 전략", "팀 회고", "데이터 분석", "프로젝트 관리"].map((example) => (
                       <button
                         key={example}
                         onClick={() => { setQuestion(example); inputRef.current?.focus(); }}
-                        className="text-xs px-3 py-1.5 rounded-full border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground hover:bg-muted/50 transition-colors"
+                        className="text-[10px] px-2 py-1 rounded-full border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
                       >
                         {example}
                       </button>
@@ -569,44 +556,30 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
                 </div>
               )}
 
-              {/* ── 💡 추천 주제 (구 AI가 묻고 있습니다 — 축소된 형태) ── */}
-              {aiGeneratedQs.length > 0 && (
-                <div className="mt-8 pt-6 border-t">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-sm">💡</span>
-                    <span className="text-xs font-medium text-muted-foreground">추천 주제</span>
-                    <span className="text-[10px] text-muted-foreground/60">트렌드 기반</span>
+              {/* ── 💡 추천 주제 + 🤖 지식 갭 (합쳐서 컴팩트하게) ── */}
+              {(aiGeneratedQs.length > 0 || aiQuestions.length > 0) && (
+                <div className="mt-4 pt-3 border-t">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="text-xs">💡</span>
+                    <span className="text-[10px] text-muted-foreground">추천</span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {aiGeneratedQs.slice(0, 5).map((q) => (
+                  <div className="flex flex-wrap gap-1">
+                    {aiGeneratedQs.slice(0, 3).map((q) => (
                       <button
                         key={q.id}
                         onClick={() => onSelectSharedQA(q.id)}
-                        className="text-xs px-3 py-1.5 rounded-full border border-muted-foreground/20 text-muted-foreground hover:border-primary/50 hover:text-foreground hover:bg-muted/50 transition-colors"
+                        className="text-[10px] px-2 py-0.5 rounded-full border border-muted-foreground/20 text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
                       >
-                        {q.title?.slice(0, 30)}{q.title && q.title.length > 30 ? "..." : ""}
-                        {q.answerCount > 0 && <span className="ml-1 text-[10px]">({q.answerCount}명)</span>}
+                        {q.title?.slice(0, 20)}{q.title && q.title.length > 20 ? "…" : ""}
                       </button>
                     ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── 🤖→👤 지식 갭 (축소된 형태) ── */}
-              {aiQuestions.length > 0 && (
-                <div className="mt-6">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs">🤖→👤</span>
-                    <span className="text-[10px] text-muted-foreground">AI가 확신하지 못하는 질문</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {aiQuestions.slice(0, 3).map((gap) => (
+                    {aiQuestions.slice(0, 2).map((gap) => (
                       <button
                         key={gap.id}
                         onClick={() => onAnswerGap ? onAnswerGap(gap.id, gap.description) : setQuestion(gap.description)}
-                        className="text-[11px] px-2.5 py-1 rounded-md border border-dashed border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-foreground hover:bg-primary/5 transition-colors"
+                        className="text-[10px] px-2 py-0.5 rounded-full border border-dashed border-amber-300/50 dark:border-amber-700/50 text-amber-700 dark:text-amber-400 hover:border-amber-400 transition-colors"
                       >
-                        {gap.description.slice(0, 40)}{gap.description.length > 40 ? "..." : ""}
+                        🤖 {gap.description.slice(0, 20)}{gap.description.length > 20 ? "…" : ""}
                       </button>
                     ))}
                   </div>
@@ -618,54 +591,34 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
         </div>
       </div>
 
-      {/* ── FAB: 새 질문하기 (Julie Zhuo) ── */}
+      {/* ── FAB: 새 질문하기 (컴팩트) ── */}
       {showTrending && (
         <button
           onClick={() => inputRef.current?.focus()}
-          className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-40 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center"
+          className="fixed bottom-16 right-3 md:bottom-4 md:right-4 z-40 h-11 w-11 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center"
           title="새 질문하기"
         >
-          <Plus className="h-6 w-6" />
+          <Plus className="h-5 w-5" />
         </button>
       )}
 
-      {/* ── Frontier Toast ── */}
+      {/* ── Frontier Toast (컴팩트) ── */}
       {showFrontierToast && (
         <div
           className={`
-            pointer-events-none absolute bottom-8 left-1/2 -translate-x-1/2 z-50
-            transition-all duration-400 ease-out
-            ${toastVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
+            pointer-events-none absolute bottom-20 left-1/2 -translate-x-1/2 z-50
+            transition-all duration-300 ease-out
+            ${toastVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}
           `}
         >
-          <div className="bg-gradient-to-br from-amber-500 to-orange-500 text-white rounded-2xl shadow-2xl px-6 py-4 max-w-sm w-[calc(100vw-3rem)]">
-            <div className="flex items-start gap-3">
-              <span className="text-3xl shrink-0">🚀</span>
-              <div className="space-y-0.5">
-                <p className="font-bold text-base leading-tight">새로운 주제 발견!</p>
-                <p className="text-sm text-white/90 leading-snug">
-                  아직 아무도 답하지 않은 영역입니다.<br />
-                  지금 길을 개척하면 <span className="font-semibold underline decoration-dotted">개척자 효과</span>로
-                  이후 걸어가는 사람들로부터 보상을 받습니다.
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 h-1 bg-white/30 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-white rounded-full"
-                style={{ animation: toastVisible ? "shrink 2s linear forwards" : "none" }}
-              />
-            </div>
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl shadow-lg px-4 py-2.5 text-sm">
+            <span className="mr-1.5">🚀</span>
+            <span className="font-medium">새 길 개척 가능!</span>
+            <span className="opacity-80 ml-1">+10👣</span>
           </div>
         </div>
       )}
 
-      <style>{`
-        @keyframes shrink {
-          from { width: 100%; }
-          to   { width: 0%; }
-        }
-      `}</style>
     </div>
   );
 }
@@ -702,7 +655,7 @@ function Pagination({ search, onPage }: { search: SearchState; onPage: (p: numbe
   );
 }
 
-// ── Q&A List Item (인라인 투자 + 활발 표시 + 신뢰도) ──
+// ── Q&A List Item (Q→A→수정 구조) ──
 function SearchResultItem({
   qa,
   index,
@@ -720,104 +673,62 @@ function SearchResultItem({
   isLoggedIn?: boolean;
   showActivityBadge?: boolean;
 }) {
-  const firstAnswer = qa.messages?.[0]?.content ?? qa.summary ?? null;
-  const score = qa.scoreDetail;
+  const aiAnswer = qa.messages?.[0]?.content ?? null;
+  const userCorrection = qa.summary ?? null; // 사용자 의견/수정
   const isCultivating = cultivatingId === qa.id;
-
-  // Trust progress: positive ratio based on investments
   const totalInv = qa.totalInvested ?? 0;
   const investorCount = qa.investorCount ?? 0;
-  const trustPercent = totalInv > 0 ? Math.min(100, Math.round((totalInv / (totalInv + 50)) * 100)) : 0;
 
   return (
     <div
-      className="group py-4 cursor-pointer hover:bg-muted/30 -mx-2 px-2 rounded-lg transition-colors"
+      className="group py-2.5 cursor-pointer hover:bg-muted/30 -mx-2 px-2 rounded-lg transition-colors"
       onClick={onClick}
     >
-      {/* Meta row */}
-      <div className="flex items-center gap-1.5 mb-1">
-        <div className="h-4 w-4 rounded-sm bg-primary/10 flex items-center justify-center shrink-0">
-          <span className="text-[9px] font-bold text-primary">Q</span>
-        </div>
-        <span className="text-xs text-green-700 dark:text-green-400 truncate">
-          {qa.creator?.name ?? "익명"}
-          {qa.tags && qa.tags.length > 0 && (
-            <> · {qa.tags.slice(0, 2).map(({ tag }) => tag.name).join(" · ")}</>
-          )}
-        </span>
-        <span className="text-xs text-muted-foreground ml-auto shrink-0 flex items-center gap-2">
-          {showActivityBadge && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-600 dark:text-orange-400 font-medium animate-pulse">
-              활발
-            </span>
-          )}
-          <span title="발자국">👣 {totalInv}</span>
-          <span title="걸어간 사람">{investorCount}명 걸어감</span>
-        </span>
-      </div>
-
-      {/* Title */}
-      <h4 className="text-[15px] font-medium text-primary group-hover:underline leading-snug mb-1.5 flex items-start gap-1">
-        <span className="flex-1">{qa.title ?? "제목 없음"}</span>
-        <ExternalLink className="h-3.5 w-3.5 mt-0.5 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />
-      </h4>
-
-      {/* Creator opinion */}
-      {qa.summary && (
-        <p className="text-sm text-amber-700 dark:text-amber-400 line-clamp-2 leading-relaxed mb-0.5">
-          💬 {qa.summary}
-        </p>
-      )}
-
-      {/* Answer preview */}
-      {firstAnswer && (
-        <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
-          {firstAnswer}
-        </p>
-      )}
-
-      {/* Trust progress bar (2단계 반영) + inline cultivate */}
-      <div className="flex items-center gap-3 mt-2.5">
-        {/* Trust bar */}
-        <div className="flex-1 flex items-center gap-2">
-          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden max-w-[120px]">
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${trustPercent}%`,
-                backgroundColor: trustPercent > 70 ? "#22c55e" : trustPercent > 40 ? "#eab308" : "#94a3b8",
-              }}
-            />
-          </div>
-          <span className="text-[10px] text-muted-foreground tabular-nums">{trustPercent}%</span>
-          {score && (
-            <span className="text-[10px] text-muted-foreground" title="종합 점수">📊 {score.total}</span>
-          )}
-        </div>
-
-        {/* Inline cultivate button */}
+      {/* Q: 질문 */}
+      <div className="flex items-start gap-1.5">
+        <span className="shrink-0 w-4 h-4 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-[8px]">👤</span>
+        <h4 className="text-[12px] font-medium text-foreground group-hover:text-primary leading-snug line-clamp-1 flex-1">
+          {qa.title ?? "제목 없음"}
+        </h4>
+        {/* Quick cultivate */}
         {isLoggedIn && onCultivate && (
           <button
             onClick={(e) => onCultivate(e, qa.id)}
             disabled={isCultivating}
-            className="shrink-0 text-xs px-3 py-1.5 rounded-full border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors disabled:opacity-50"
-            title="10발자국 남기기"
+            className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border border-green-300/50 dark:border-green-700/50 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
           >
-            {isCultivating ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "👣 발자국"}
+            {isCultivating ? <Loader2 className="h-2.5 w-2.5 animate-spin inline" /> : "👣"}
           </button>
         )}
       </div>
 
-      {/* Tags */}
-      {qa.tags && qa.tags.length > 0 && (
-        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-          {qa.tags.slice(0, 4).map(({ tag }) => (
-            <Badge key={tag.name} variant="secondary" className="text-[10px] py-0 px-1.5 h-4 font-normal">
-              {tag.name}
-            </Badge>
-          ))}
+      {/* A: AI 답변 */}
+      {aiAnswer && (
+        <div className="flex items-start gap-1.5 mt-1">
+          <span className="shrink-0 w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-[8px]">🤖</span>
+          <p className="text-[10px] text-muted-foreground line-clamp-1 flex-1">{aiAnswer}</p>
         </div>
       )}
+
+      {/* 수정: 사용자 의견 */}
+      {userCorrection && (
+        <div className="flex items-start gap-1.5 mt-1">
+          <span className="shrink-0 w-4 h-4 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center text-[8px]">✏️</span>
+          <p className="text-[10px] text-amber-700 dark:text-amber-400 line-clamp-1 flex-1">{userCorrection}</p>
+        </div>
+      )}
+
+      {/* 메타 */}
+      <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground mt-1 pl-5">
+        <span>{qa.creator?.name ?? "익명"}</span>
+        <span>·</span>
+        <span>👣 {totalInv}</span>
+        <span>·</span>
+        <span>{investorCount}명</span>
+        {showActivityBadge && (
+          <span className="px-1 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-600 dark:text-orange-400 font-medium">활발</span>
+        )}
+      </div>
     </div>
   );
 }
