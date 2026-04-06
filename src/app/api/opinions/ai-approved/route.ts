@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ opinions: [] });
   }
 
-  // AI가 투자한 의견 조회
+  // AI가 투자한 의견 조회 (OpinionNode → Message → QASet 경로로)
   const aiInvestments = await prisma.investment.findMany({
     where: {
       userId: systemUser.id,
@@ -37,11 +37,12 @@ export async function GET(req: NextRequest) {
             where: { isActive: true },
             select: { amount: true, userId: true },
           },
-          relationsAsSource: {
-            where: { targetQASetId: { not: null } },
-            take: 1,
-            include: {
-              targetQASet: {
+          // OpinionNode → Message → QASet 경로로 원본 질문/답변 가져오기
+          message: {
+            select: {
+              content: true,
+              role: true,
+              qaSet: {
                 select: {
                   id: true,
                   title: true,
@@ -65,7 +66,8 @@ export async function GET(req: NextRequest) {
     .filter(inv => inv.opinionNode)
     .map(inv => {
       const opinion = inv.opinionNode!;
-      const qaSet = opinion.relationsAsSource[0]?.targetQASet;
+      const qaSet = opinion.message?.qaSet;
+      const aiAnswer = qaSet?.messages?.[0]?.content ?? opinion.message?.content ?? null;
       const totalInvested = opinion.investments.reduce((sum, i) => sum + i.amount, 0);
       const investorCount = opinion.investments.length;
 
@@ -82,7 +84,7 @@ export async function GET(req: NextRequest) {
           id: qaSet.id,
           title: qaSet.title,
           isShared: qaSet.isShared,
-          aiAnswer: qaSet.messages?.[0]?.content ?? null,
+          aiAnswer,
         } : null,
       };
     });
