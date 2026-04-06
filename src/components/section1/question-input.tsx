@@ -61,6 +61,16 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
     aiQuestionType: string; rewardMultiplier: number;
     answerCount: number; cluster: { id: string; name: string } | null;
   }>>([]);
+  const [aiApprovedOpinions, setAiApprovedOpinions] = useState<Array<{
+    id: string;
+    content: string;
+    createdAt: string;
+    user: { id: string; name: string | null; image: string | null };
+    aiInvestment: number;
+    totalInvested: number;
+    investorCount: number;
+    qaSet: { id: string; title: string | null; isShared: boolean } | null;
+  }>>([]);
   const [cultivatingId, setCultivatingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -110,6 +120,12 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
     fetch("/api/tags")
       .then((r) => r.ok ? r.json() : null)
       .then((d) => d && setPopularTags(d.tags ?? []))
+      .catch(() => {});
+
+    // AI-approved opinions (AI가 인정한 정보)
+    fetch("/api/opinions/ai-approved?limit=5")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.opinions) setAiApprovedOpinions(d.opinions); })
       .catch(() => {});
   }, []);
 
@@ -467,6 +483,44 @@ export function Section1QuestionInput({ onNewQuestion, onSelectSharedQA, onAnswe
 
               {/* ── E. 개인 상태 — "👤 나의 현황" (Yu-kai Chou Drive 1+5) ── */}
               <MyStatus />
+
+              {/* ── 🎯 AI가 인정한 정보 ── */}
+              {aiApprovedOpinions.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-base">🎯</span>
+                    <h3 className="text-sm font-semibold">AI가 인정한 정보</h3>
+                    <span className="text-[10px] text-muted-foreground">사용자가 발견한 AI 빈틈</span>
+                  </div>
+                  <div className="space-y-2">
+                    {aiApprovedOpinions.map((opinion) => (
+                      <div
+                        key={opinion.id}
+                        className="group p-3 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/20 hover:border-amber-300 dark:hover:border-amber-700 transition-colors cursor-pointer"
+                        onClick={() => opinion.qaSet && onSelectSharedQA(opinion.qaSet.id)}
+                      >
+                        <p className="text-sm line-clamp-2 mb-2">{opinion.content}</p>
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <span>{opinion.user.name ?? "익명"}</span>
+                            {opinion.qaSet && (
+                              <span className="truncate max-w-[150px]">· {opinion.qaSet.title ?? "Q&A"}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-amber-600 dark:text-amber-400 font-medium">
+                              AI 👣{opinion.aiInvestment}
+                            </span>
+                            {opinion.investorCount > 1 && (
+                              <span>+{opinion.investorCount - 1}명 동의</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* ── 🔥 인기 있는 길 ── */}
               {trendingQAs.length > 0 ? (

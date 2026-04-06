@@ -28,6 +28,7 @@ export const FOOTPRINT_REWARDS = {
   SIGNUP: 30,       // 가입 시
   AI_ANSWER: 5,     // AI 답변 생성 시
   PIONEER: 10,      // 새 길 개척 시
+  GAP_FILL: 25,     // AI 빈틈 채우기 (사냥 보상 - 2배 이상)
 } as const;
 
 // 보상 상한 (제한 없음 - 무제한)

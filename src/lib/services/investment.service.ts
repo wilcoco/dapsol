@@ -43,7 +43,8 @@ const NEGATIVE_MILESTONE_RATIOS: Record<number, number> = { 3: 0.20, 10: 0.30, 2
 export interface InvestmentInput {
   userId: string;
   userName: string | null;
-  qaSetId: string;
+  qaSetId?: string;          // QASet 투자
+  opinionNodeId?: string;    // 의견 투자 (추가)
   amount: number;
   isNegative: boolean;
   comment?: string;
@@ -195,9 +196,10 @@ export async function validateInvestment(
     validatePositiveInvestment(input, user, qaSet);
   }
 
-  // Anti-gaming
+  // Anti-gaming (qaSetId is guaranteed by guard above)
+  const qaSetId = input.qaSetId!;
   const violation = await checkInvestmentRules(
-    prisma, input.userId, input.qaSetId, qaSet.creatorId,
+    prisma, input.userId, qaSetId, qaSet.creatorId,
     input.amount, user.createdAt, input.isNegative,
   );
   if (violation) {
@@ -206,7 +208,7 @@ export async function validateInvestment(
 
   // Mutual investment blocking (positive only)
   if (!input.isNegative) {
-    const mutualViolation = await detectMutualInvestment(prisma, input.userId, input.qaSetId);
+    const mutualViolation = await detectMutualInvestment(prisma, input.userId, qaSetId);
     if (mutualViolation) {
       throw new InvestmentValidationError(mutualViolation.message, mutualViolation.code, mutualViolation.statusCode);
     }
@@ -244,6 +246,8 @@ async function processPositiveInvestment(
   user: LoadedUser,
   qaSet: LoadedQASet,
 ): Promise<InvestmentResult> {
+  const qaSetId = input.qaSetId!; // Guaranteed by processInvestment guard
+
   // Fork royalty calculation
   let royaltyAmount = 0;
   let royaltyRate = 0;
@@ -280,17 +284,17 @@ async function processPositiveInvestment(
 
   // Consolidated transaction
   const { newPosition, investmentId } = await prisma.$transaction(async (tx) => {
-    const currentQASet = await tx.qASet.findUnique({ where: { id: input.qaSetId }, select: { version: true } });
+    const currentQASet = await tx.qASet.findUnique({ where: { id: qaSetId }, select: { version: true } });
     if (!currentQASet) throw new Error("QASet not found in transaction");
 
     const maxPos = await tx.investment.aggregate({
-      where: { qaSetId: input.qaSetId, isNegative: false }, _max: { position: true },
+      where: { qaSetId, isNegative: false }, _max: { position: true },
     });
     const pos = (maxPos._max.position ?? 0) + 1;
 
     const inv = await tx.investment.create({
       data: {
-        qaSetId: input.qaSetId, userId: input.userId, amount: input.amount,
+        qaSetId, userId: input.userId, amount: input.amount,
         position: pos, effectiveAmount: effAmount, isNegative: false, comment: input.comment,
       },
     });
@@ -298,7 +302,7 @@ async function processPositiveInvestment(
     await tx.user.update({ where: { id: input.userId }, data: { balance: { decrement: input.amount } } });
 
     await tx.qASet.update({
-      where: { id: input.qaSetId, version: currentQASet.version },
+      where: { id: qaSetId, version: currentQASet.version },
       data: {
         totalInvested: { increment: input.amount },
         investorCount: { increment: 1 },
@@ -323,7 +327,7 @@ async function processPositiveInvestment(
     if (split.rewards.length > 0) {
       await tx.rewardEvent.createMany({
         data: split.rewards.map((r) => ({
-          recipientId: r.recipientId, amount: r.amount, qaSetId: input.qaSetId,
+          recipientId: r.recipientId, amount: r.amount, qaSetId,
           sourceInvestmentId: inv.id, rewardType: "hub_weighted_distribution",
         })),
       });
@@ -332,7 +336,7 @@ async function processPositiveInvestment(
     // Audit logs
     await tx.auditLog.create({
       data: {
-        action: "invest", userId: input.userId, qaSetId: input.qaSetId, amount: input.amount,
+        action: "invest", userId: input.userId, qaSetId, amount: input.amount,
         metadata: JSON.stringify({
           position: pos, qualityPool: adjustedQualityPool,
           rewardPool: split.rewardPool, burnAmount, rewardCount: split.rewards.length,
@@ -342,7 +346,7 @@ async function processPositiveInvestment(
     if (burnAmount > 0) {
       await tx.auditLog.create({
         data: {
-          action: "burn", userId: input.userId, qaSetId: input.qaSetId, amount: burnAmount,
+          action: "burn", userId: input.userId, qaSetId, amount: burnAmount,
           metadata: JSON.stringify({ source: "investment_burn_ratio" }),
         },
       });
@@ -355,7 +359,7 @@ async function processPositiveInvestment(
   sendPositiveNotifications(input, user, qaSet, split.rewards, investmentId);
 
   // Quality pool milestone
-  const poolRelease = await handlePositiveMilestone(input.qaSetId, newPosition, investmentId);
+  const poolRelease = await handlePositiveMilestone(qaSetId, newPosition, investmentId);
 
   // Fork royalty
   const forkRoyalty = await handleForkRoyalty(qaSet, royaltyAmount, royaltyRate, parentCreatorAuth, forkCreatorAuth, investmentId);
@@ -386,6 +390,7 @@ async function processNegativeInvestment(
   user: LoadedUser,
   qaSet: LoadedQASet,
 ): Promise<InvestmentResult> {
+  const qaSetId = input.qaSetId!; // Guaranteed by processInvestment guard
   const rewardPool = Math.floor(input.amount * NEGATIVE_REWARD_RATIO);
   let negativePool = input.amount - rewardPool;
 
@@ -406,13 +411,13 @@ async function processNegativeInvestment(
   // Transaction
   const { negativePosition, negInvestmentId } = await prisma.$transaction(async (tx) => {
     const maxPos = await tx.investment.aggregate({
-      where: { qaSetId: input.qaSetId, isNegative: true }, _max: { position: true },
+      where: { qaSetId, isNegative: true }, _max: { position: true },
     });
     const pos = (maxPos._max.position ?? 0) + 1;
 
     const inv = await tx.investment.create({
       data: {
-        qaSetId: input.qaSetId, userId: input.userId, amount: input.amount,
+        qaSetId, userId: input.userId, amount: input.amount,
         position: pos, effectiveAmount: effAmount, isNegative: true, comment: input.comment,
         huntingReason: input.huntingReason, huntingEvidence: input.huntingEvidence,
         huntingTargetMessageId: input.huntingTargetMessageId,
@@ -422,7 +427,7 @@ async function processNegativeInvestment(
     await tx.user.update({ where: { id: input.userId }, data: { balance: { decrement: input.amount } } });
 
     await tx.qASet.update({
-      where: { id: input.qaSetId },
+      where: { id: qaSetId },
       data: {
         negativeInvested: { increment: input.amount },
         negativeCount: { increment: 1 },
@@ -434,23 +439,23 @@ async function processNegativeInvestment(
   });
 
   // Distribute rewards to prior negative investors
-  await distributeNegativeRewardsToInvestors(rewards, existingNegInvestors, negInvestmentId, input.qaSetId);
+  await distributeNegativeRewardsToInvestors(rewards, existingNegInvestors, negInvestmentId, qaSetId);
 
   // Notifications
   sendNegativeNotifications(input, user, qaSet, rewards, negInvestmentId);
 
   // Negative milestone
-  const negPoolRelease = await handleNegativeMilestone(input.qaSetId, negativePosition, negInvestmentId);
+  const negPoolRelease = await handleNegativeMilestone(qaSetId, negativePosition, negInvestmentId);
 
   // Collapse check
-  const { netInvested, isCollapsed } = await checkCollapse(input.qaSetId);
+  const { netInvested, isCollapsed } = await checkCollapse(qaSetId);
 
   // Trust level + HITS
   const trustLevelUp = await recalcTrustLevel(input.userId);
   recalcHITS(input.userId, qaSet, rewards);
 
   // Trigger controversy check
-  checkAndTriggerControversy(input.qaSetId).catch(console.error);
+  checkAndTriggerControversy(qaSetId).catch(console.error);
 
   return {
     success: true,
@@ -773,6 +778,7 @@ function sendPositiveNotifications(
   input: InvestmentInput, user: LoadedUser, qaSet: LoadedQASet,
   rewards: RewardDistribution[], investmentId: string,
 ): void {
+  const qaSetId = input.qaSetId!;
   const investorName = user.name ?? "익명";
   const notifs: Promise<unknown>[] = [];
 
@@ -780,7 +786,7 @@ function sendPositiveNotifications(
     notifs.push(createNotification({
       userId: qaSet.creatorId, type: "investment_received",
       title: "새로운 투자!", body: `${investorName}님이 ${input.amount}💰 투자했습니다`,
-      link: `/?qaSetId=${input.qaSetId}`, qaSetId: input.qaSetId, investmentId,
+      link: `/?qaSetId=${qaSetId}`, qaSetId, investmentId,
     }));
   }
 
@@ -789,7 +795,7 @@ function sendPositiveNotifications(
       notifs.push(createNotification({
         userId: reward.recipientId, type: "reward_earned",
         title: "투자 보상!", body: `+${reward.amount}💰 보상을 받았습니다`,
-        link: `/?qaSetId=${input.qaSetId}`, qaSetId: input.qaSetId,
+        link: `/?qaSetId=${qaSetId}`, qaSetId,
       }));
     }
   }
@@ -801,13 +807,14 @@ function sendNegativeNotifications(
   input: InvestmentInput, user: LoadedUser, qaSet: LoadedQASet,
   rewards: RewardDistribution[], investmentId: string,
 ): void {
+  const qaSetId = input.qaSetId!;
   const investorName = user.name ?? "익명";
   const notifs: Promise<unknown>[] = [];
 
   notifs.push(createNotification({
     userId: qaSet.creatorId, type: "hunt_received",
     title: "반대 투자 알림!", body: `${investorName}님이 ${input.amount}📉 반대 투자했습니다`,
-    link: `/?qaSetId=${input.qaSetId}`, qaSetId: input.qaSetId, investmentId,
+    link: `/?qaSetId=${qaSetId}`, qaSetId, investmentId,
   }));
 
   for (const reward of rewards) {
@@ -815,7 +822,7 @@ function sendNegativeNotifications(
       notifs.push(createNotification({
         userId: reward.recipientId, type: "reward_earned",
         title: "반대 투자 보상!", body: `+${reward.amount}📉 보상을 받았습니다`,
-        link: `/?qaSetId=${input.qaSetId}`, qaSetId: input.qaSetId,
+        link: `/?qaSetId=${qaSetId}`, qaSetId,
       }));
     }
   }
@@ -852,6 +859,9 @@ function recalcHITS(userId: string, qaSet: LoadedQASet, rewards: RewardDistribut
  * @throws InvestmentValidationError 검증 실패 시
  */
 export async function processInvestment(input: InvestmentInput): Promise<InvestmentResult> {
+  if (!input.qaSetId) {
+    throw new InvestmentValidationError("QASet ID is required", "QASET_ID_REQUIRED", 400);
+  }
   const { user, qaSet } = await loadEntities(input.userId, input.qaSetId);
   await validateInvestment(input, user, qaSet);
 

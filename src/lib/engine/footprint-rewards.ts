@@ -5,7 +5,7 @@
 import { prisma } from "@/lib/prisma";
 import { FOOTPRINT_REWARDS } from "./reward-calculator";
 
-export type FootprintRewardType = "SIGNUP" | "AI_ANSWER" | "PIONEER";
+export type FootprintRewardType = "SIGNUP" | "AI_ANSWER" | "PIONEER" | "GAP_FILL";
 
 /**
  * 사용자에게 발자국 보상 지급
@@ -58,4 +58,11 @@ export async function grantAIAnswerReward(userId: string, qaSetId: string) {
  */
 export async function grantPioneerReward(userId: string, qaSetId: string) {
   return grantFootprintReward(userId, "PIONEER", qaSetId);
+}
+
+/**
+ * AI 빈틈 채우기 보상 지급 (사냥 성공)
+ */
+export async function grantGapFillReward(userId: string, qaSetId: string) {
+  return grantFootprintReward(userId, "GAP_FILL", qaSetId);
 }

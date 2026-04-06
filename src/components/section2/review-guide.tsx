@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Slider } from "@/components/ui/slider";
 import { Loader2, Send, ChevronRight } from "lucide-react";
 import type { QASetWithMessages } from "@/types/qa-set";
 
@@ -11,6 +12,7 @@ interface ReviewGuideProps {
   qaSet: QASetWithMessages;
   isOwner: boolean;
   userId?: string;
+  userBalance?: number;
   isHumanAnswer?: boolean;
   onInvest: () => void;
   onCounterInvest: () => void;
@@ -19,21 +21,17 @@ interface ReviewGuideProps {
   onAskFollowUp: (question: string) => void;
 }
 
-const OPINION_RELATIONS = [
-  { value: "evidence", label: "근거 보충", icon: "📎" },
-  { value: "counterargument", label: "반박", icon: "⚡" },
-  { value: "application", label: "경험 공유", icon: "💡" },
-  { value: "extension", label: "확장", icon: "➕" },
-];
-
-// AI 답변의 알려진 오류 유형 (학술 분류 기반)
-const AI_ERROR_TYPES = [
-  { value: "factual_error", label: "사실 오류", icon: "❌", desc: "틀린 사실이나 존재하지 않는 정보", color: "red" },
-  { value: "outdated_info", label: "오래된 정보", icon: "📅", desc: "현재 기준에 맞지 않는 과거 정보", color: "amber" },
-  { value: "hallucination", label: "환각(날조)", icon: "👻", desc: "그럴듯하지만 완전히 만들어낸 내용", color: "purple" },
-  { value: "oversimplification", label: "과도한 단순화", icon: "📐", desc: "복잡한 현실을 지나치게 단순화", color: "blue" },
-  { value: "missing_context", label: "맥락 누락", icon: "🔍", desc: "중요한 조건이나 예외를 빠뜨림", color: "orange" },
-  { value: "confident_uncertainty", label: "불확실한데 확신", icon: "🎭", desc: "모르는 것을 아는 것처럼 답변", color: "pink" },
+// AI 빈틈 유형 (사냥 메타포어)
+const AI_GAP_TYPES = [
+  { value: "wrong_info", label: "틀린 정보", icon: "🎯", desc: "AI가 잘못 알고 있음" },
+  { value: "outdated", label: "최신 아님", icon: "⏰", desc: "내가 더 최신 정보 앎" },
+  { value: "made_up", label: "없는 얘기", icon: "🚫", desc: "AI가 지어냄" },
+  { value: "reality_differs", label: "현실은 다름", icon: "📍", desc: "실제로 해보면 다름" },
+  { value: "missing_key", label: "중요한 게 빠짐", icon: "🔑", desc: "핵심을 놓침" },
+  { value: "ai_doesnt_know", label: "AI도 모름", icon: "🤷", desc: "이건 사람만 앎" },
+  { value: "local_info", label: "로컬 정보", icon: "🏠", desc: "우리 동네/현장은 다름" },
+  { value: "experience", label: "경험담", icon: "💬", desc: "실제로 해본 사람만 앎" },
+  { value: "other", label: "기타", icon: "✏️", desc: "직접 입력" },
 ];
 
 // ─── Progress Stepper ───
@@ -149,112 +147,315 @@ function FollowUpInput({
   );
 }
 
-// ─── AI Error Type Selector ───
-function AIErrorFeedback({
+// ─── AI 평가 결과 타입 ───
+interface AIEvaluation {
+  isValid: boolean;
+  accuracy: number;
+  significance: number;
+  reasoning: string;
+  suggestedReward: number;
+  aiComment: string;
+}
+
+// ─── 빈틈 채우기 (AI Gap Filler) ───
+function GapFiller({
   qaSetId,
   onSubmitted,
+  onShareQA,
+  userBalance = 100,
+  originalQuestion = "",
+  originalAnswer = "",
 }: {
   qaSetId: string;
   onSubmitted: () => void;
+  onShareQA?: () => void;
+  userBalance?: number;
+  originalQuestion?: string;
+  originalAnswer?: string;
 }) {
-  const [selectedErrors, setSelectedErrors] = useState<string[]>([]);
-  const [detail, setDetail] = useState("");
+  const [selectedGap, setSelectedGap] = useState<string | null>(null);
+  const [customGapType, setCustomGapType] = useState("");
+  const [content, setContent] = useState("");
+  const [confidence, setConfidence] = useState(10);
   const [submitting, setSubmitting] = useState(false);
+  const [evaluating, setEvaluating] = useState(false);
   const [done, setDone] = useState(false);
+  const [resultReward, setResultReward] = useState(0);
+  const [aiEvaluation, setAiEvaluation] = useState<AIEvaluation | null>(null);
+  const [aiInvestment, setAiInvestment] = useState(0);
 
-  const toggle = (value: string) => {
-    setSelectedErrors((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
-    );
-  };
+  const maxConfidence = Math.min(userBalance, 100);
 
   const handleSubmit = async () => {
-    if (selectedErrors.length === 0 || submitting) return;
+    if (!selectedGap || submitting) return;
+    if (selectedGap === "other" && !customGapType.trim()) return;
+    if (!content.trim()) return;
+
     setSubmitting(true);
     try {
-      const labels = selectedErrors
-        .map((v) => AI_ERROR_TYPES.find((t) => t.value === v)?.label)
-        .filter(Boolean);
-      const content = `[AI 오류 신고] ${labels.join(", ")}${detail.trim() ? `\n\n${detail.trim()}` : ""}`;
+      const gapLabel = selectedGap === "other"
+        ? customGapType.trim()
+        : AI_GAP_TYPES.find((t) => t.value === selectedGap)?.label;
+      const gapIcon = AI_GAP_TYPES.find((t) => t.value === selectedGap)?.icon ?? "💎";
 
+      const fullContent = `${gapIcon} [${gapLabel}] ${content.trim()}`;
+
+      // 1. 빈틈 채우기 의견 생성 + 기본 보상 + 확신 투자
       const opRes = await fetch("/api/opinions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content: fullContent,
+          targetQASetId: qaSetId,
+          relationType: "extension",
+          isGapFill: true,
+          confidenceAmount: confidence,
+        }),
       });
       if (!opRes.ok) throw new Error("fail");
-      const opinion = await opRes.json();
-      await fetch("/api/relations", {
+      const result = await opRes.json();
+      setResultReward(result.reward?.amount ?? 25);
+
+      // 2. AI 평가 요청
+      setEvaluating(true);
+      const evalRes = await fetch("/api/opinions/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sourceOpinionId: opinion.id,
-          targetQASetId: qaSetId,
-          relationType: "counterargument",
+          originalQuestion,
+          originalAnswer,
+          gapType: selectedGap,
+          userCorrection: content.trim(),
+          opinionId: result.id,
+          qaSetId,
         }),
       });
+
+      if (evalRes.ok) {
+        const evalResult = await evalRes.json();
+        setAiEvaluation(evalResult.evaluation);
+        setAiInvestment(evalResult.systemInvestment?.amount ?? 0);
+      }
+
       setDone(true);
       onSubmitted();
     } catch {
       // ignore
     } finally {
       setSubmitting(false);
+      setEvaluating(false);
     }
   };
 
+  // 완료 화면: AI 평가 결과 + 공유 유도
   if (done) {
+    const totalReward = resultReward + aiInvestment;
+
     return (
-      <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20 p-3 text-center">
-        <span className="text-sm text-green-700 dark:text-green-400">✅ 오류 신고가 등록되었습니다</span>
+      <div className="rounded-2xl border-2 border-amber-200 dark:border-amber-800 bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 dark:from-amber-950/30 dark:via-yellow-950/30 dark:to-orange-950/30 p-5 space-y-4">
+        {/* AI 평가 결과 */}
+        {aiEvaluation && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🤖</span>
+              <span className="text-sm font-semibold">AI 평가</span>
+              {aiEvaluation.isValid && (
+                <Badge className="bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400 border-0 text-[10px]">
+                  인정됨
+                </Badge>
+              )}
+            </div>
+
+            <div className="p-3 rounded-xl bg-white/50 dark:bg-black/20 border border-amber-200/50 dark:border-amber-700/50">
+              <p className="text-sm text-foreground/90 italic">&ldquo;{aiEvaluation.aiComment}&rdquo;</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-center">
+                <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{aiEvaluation.accuracy}</div>
+                <div className="text-muted-foreground">정확도</div>
+              </div>
+              <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/30 text-center">
+                <div className="text-lg font-bold text-purple-600 dark:text-purple-400">{aiEvaluation.significance}</div>
+                <div className="text-muted-foreground">기여도</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 보상 요약 */}
+        <div className="p-3 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-200 dark:border-green-800">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">🏆 획득 보상</span>
+            <span className="text-lg font-bold text-green-600 dark:text-green-400">+{totalReward} 👣</span>
+          </div>
+          <div className="space-y-1 text-xs text-muted-foreground">
+            <div className="flex justify-between">
+              <span>기본 보상</span>
+              <span>+{resultReward} 👣</span>
+            </div>
+            {aiInvestment > 0 && (
+              <div className="flex justify-between text-blue-600 dark:text-blue-400">
+                <span>🤖 AI 투자</span>
+                <span>+{aiInvestment} 👣</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span>내 확신 투자</span>
+              <span className="text-amber-600">-{confidence} 👣</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 공유 유도 */}
+        {aiEvaluation?.isValid && onShareQA && (
+          <div className="p-3 rounded-xl bg-gradient-to-r from-primary/10 to-blue-500/10 border border-primary/30 space-y-2">
+            <p className="text-sm font-medium text-center">
+              💎 AI가 인정한 좋은 정보네요!
+            </p>
+            <p className="text-xs text-muted-foreground text-center">
+              공유하면 다른 사람들이 동의 투자할 수 있어요
+            </p>
+            <Button
+              onClick={onShareQA}
+              className="w-full gap-2 bg-primary hover:bg-primary/90"
+              size="sm"
+            >
+              📢 공유하고 더 많은 보상 받기
+            </Button>
+          </div>
+        )}
+
+        {/* 공유 안 함 옵션 */}
+        {!aiEvaluation?.isValid && (
+          <p className="text-xs text-center text-muted-foreground">
+            다른 사람이 동의 투자하면 추가 보상을 받을 수 있어요
+          </p>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border p-3 space-y-2.5">
-      <div className="flex items-center gap-2">
-        <span className="text-base">🔎</span>
-        <span className="text-sm font-medium">AI 답변 오류 신고</span>
-        <span className="text-[10px] text-muted-foreground">해당하는 항목을 선택하세요</span>
+    <div className="rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-primary/5 via-blue-50/50 to-indigo-50/50 dark:from-primary/10 dark:via-blue-950/20 dark:to-indigo-950/20 p-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">💎</span>
+          <div>
+            <h3 className="text-sm font-semibold">AI가 놓친 부분이 있나요?</h3>
+            <p className="text-[11px] text-muted-foreground">당신의 지식으로 채우면 보상 2배</p>
+          </div>
+        </div>
+        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400 border-0">
+          +25 👣
+        </Badge>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-        {AI_ERROR_TYPES.map((err) => {
-          const selected = selectedErrors.includes(err.value);
-          return (
-            <button
-              key={err.value}
-              onClick={() => toggle(err.value)}
-              className={`text-left p-2 rounded-lg border transition-all text-[11px] ${
-                selected
-                  ? "border-red-400 bg-red-50 dark:bg-red-950/30 ring-1 ring-red-400"
-                  : "border-border hover:border-red-300 hover:bg-red-50/50 dark:hover:bg-red-950/10"
-              }`}
-            >
-              <div className="flex items-center gap-1">
-                <span>{err.icon}</span>
-                <span className="font-medium">{err.label}</span>
-              </div>
-              <p className="text-[9px] text-muted-foreground mt-0.5 leading-snug">{err.desc}</p>
-            </button>
-          );
-        })}
+
+      {/* Gap Type Selection */}
+      <div className="flex flex-wrap gap-1.5">
+        {AI_GAP_TYPES.map((gap) => (
+          <button
+            key={gap.value}
+            onClick={() => setSelectedGap(selectedGap === gap.value ? null : gap.value)}
+            className={`text-[11px] px-2.5 py-1.5 rounded-full border transition-all ${
+              selectedGap === gap.value
+                ? "border-primary bg-primary text-primary-foreground font-medium"
+                : "border-border bg-background hover:border-primary/50 hover:bg-primary/5"
+            }`}
+            title={gap.desc}
+          >
+            {gap.icon} {gap.label}
+          </button>
+        ))}
       </div>
-      {selectedErrors.length > 0 && (
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="구체적 내용 (선택)..."
-            value={detail}
-            onChange={(e) => setDetail(e.target.value)}
-            className="flex-1 h-8 px-2.5 text-xs rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+
+      {/* Custom Gap Type Input (when "기타" selected) */}
+      {selectedGap === "other" && (
+        <input
+          type="text"
+          placeholder="빈틈 유형을 직접 입력하세요..."
+          value={customGapType}
+          onChange={(e) => setCustomGapType(e.target.value)}
+          className="w-full h-9 px-3 text-sm rounded-lg border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+          autoFocus
+        />
+      )}
+
+      {/* Content Input + Confidence Slider (shown when gap type selected) */}
+      {selectedGap && (
+        <div className="space-y-3">
+          <Textarea
+            placeholder={
+              selectedGap === "local_info" ? "이 동네/현장에서는 실제로..." :
+              selectedGap === "experience" ? "직접 해보니까..." :
+              selectedGap === "outdated" ? "최근에 바뀌어서 지금은..." :
+              selectedGap === "reality_differs" ? "실제로는 이렇습니다..." :
+              "AI가 놓친 부분을 채워주세요..."
+            }
+            value={content}
+            onChange={(e) => setContent(e.target.value.slice(0, 2000))}
+            className="min-h-[80px] text-sm resize-none"
+            rows={3}
           />
+          <span className="text-[10px] text-muted-foreground">{content.length}/2000</span>
+
+          {/* Confidence Slider */}
+          {content.trim() && (
+            <div className="p-3 rounded-xl bg-gradient-to-r from-amber-50/50 to-yellow-50/50 dark:from-amber-950/20 dark:to-yellow-950/20 border border-amber-200/50 dark:border-amber-800/50 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">📊</span>
+                  <span className="text-xs font-medium">내 확신도</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-lg font-bold text-amber-600 dark:text-amber-400">{confidence}</span>
+                  <span className="text-xs text-muted-foreground">👣</span>
+                </div>
+              </div>
+
+              <Slider
+                value={[confidence]}
+                onValueChange={(v) => setConfidence(v[0])}
+                min={5}
+                max={maxConfidence}
+                step={5}
+                className="w-full"
+              />
+
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>5 👣</span>
+                <span className="text-amber-600 dark:text-amber-400">
+                  확신이 높을수록, 동의 받으면 더 큰 보상
+                </span>
+                <span>{maxConfidence} 👣</span>
+              </div>
+            </div>
+          )}
+
           <Button
             size="sm"
-            disabled={submitting}
+            disabled={!content.trim() || submitting || evaluating || (selectedGap === "other" && !customGapType.trim())}
             onClick={handleSubmit}
-            className="shrink-0 h-8 text-xs gap-1 bg-red-600 hover:bg-red-700 text-white"
+            className="w-full gap-2 h-10 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium"
           >
-            {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : "🔎"} 신고
+            {submitting && !evaluating && (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                제출 중...
+              </>
+            )}
+            {evaluating && (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                🤖 AI 평가 중...
+              </>
+            )}
+            {!submitting && !evaluating && (
+              <>
+                💎 빈틈 채우기 + {confidence}👣 투자
+              </>
+            )}
           </Button>
         </div>
       )}
@@ -266,6 +467,7 @@ export function ReviewGuide({
   qaSet,
   isOwner,
   userId,
+  userBalance = 30,
   isHumanAnswer,
   onInvest,
   onCounterInvest,
@@ -273,12 +475,7 @@ export function ReviewGuide({
   onOpinionSubmitted,
   onAskFollowUp,
 }: ReviewGuideProps) {
-  const [opinionText, setOpinionText] = useState("");
-  const [opinionRelation, setOpinionRelation] = useState("evidence");
-  const [submittingOpinion, setSubmittingOpinion] = useState(false);
-  const [opinionDone, setOpinionDone] = useState(false);
   const [followUpText, setFollowUpText] = useState("");
-  const [expandOpinion, setExpandOpinion] = useState(false);
 
   const investorCount = qaSet.investorCount ?? 0;
   const totalInvested = qaSet.totalInvested ?? 0;
@@ -287,37 +484,6 @@ export function ReviewGuide({
   const myInvestment = (qaSet.investments ?? []).find(
     (inv) => inv.userId === userId && !inv.isNegative
   );
-
-  const handleSubmitOpinion = useCallback(async () => {
-    if (!opinionText.trim() || submittingOpinion) return;
-    setSubmittingOpinion(true);
-    try {
-      const opRes = await fetch("/api/opinions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: opinionText.trim() }),
-      });
-      if (!opRes.ok) throw new Error("fail");
-      const opinion = await opRes.json();
-      await fetch("/api/relations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sourceOpinionId: opinion.id,
-          targetQASetId: qaSet.id,
-          relationType: opinionRelation,
-        }),
-      });
-      setOpinionDone(true);
-      setOpinionText("");
-      setExpandOpinion(false);
-      onOpinionSubmitted();
-    } catch (err) {
-      console.error("Opinion submit error:", err);
-    } finally {
-      setSubmittingOpinion(false);
-    }
-  }, [opinionText, opinionRelation, qaSet.id, submittingOpinion, onOpinionSubmitted]);
 
   const handleSendFollowUp = () => {
     if (!followUpText.trim()) return;
@@ -407,74 +573,22 @@ export function ReviewGuide({
             </div>
           </div>
 
-          {/* AI 오류 신고 */}
-          <AIErrorFeedback qaSetId={qaSet.id} onSubmitted={onOpinionSubmitted} />
+          {/* 💎 빈틈 채우기 (통합 모듈) */}
+          <GapFiller
+            qaSetId={qaSet.id}
+            onSubmitted={onOpinionSubmitted}
+            onShareQA={onShareQA}
+            userBalance={userBalance}
+            originalQuestion={qaSet.messages?.find(m => m.role === "user")?.content ?? qaSet.title ?? ""}
+            originalAnswer={qaSet.messages?.filter(m => m.role === "assistant").map(m => m.content).join("\n") ?? ""}
+          />
 
-          {/* 의견 + 추가질문 — 공유 전에도 항상 접근 가능 */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* 의견 */}
-            <div
-              className="rounded-xl border p-3 transition-all cursor-pointer hover:border-primary/30"
-              onClick={() => !expandOpinion && setExpandOpinion(true)}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">✍️</span>
-                  <span className="text-sm font-medium">내 의견</span>
-                </div>
-                {opinionDone && (
-                  <Badge variant="outline" className="text-[10px] border-green-300 text-green-600">등록됨 ✓</Badge>
-                )}
-              </div>
-              {!expandOpinion && (
-                <p className="text-[11px] text-muted-foreground mt-1">경험, 반박, 보충 근거 추가</p>
-              )}
-              {expandOpinion && (
-                <div className="mt-3 space-y-2.5" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex gap-1.5 flex-wrap">
-                    {OPINION_RELATIONS.map((rel) => (
-                      <button
-                        key={rel.value}
-                        onClick={() => setOpinionRelation(rel.value)}
-                        className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${
-                          opinionRelation === rel.value
-                            ? "border-primary bg-primary/10 text-primary font-medium"
-                            : "border-border text-muted-foreground hover:border-primary/40"
-                        }`}
-                      >
-                        {rel.icon} {rel.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <Textarea
-                      placeholder="의견을 작성하세요..."
-                      value={opinionText}
-                      onChange={(e) => setOpinionText(e.target.value.slice(0, 1000))}
-                      className="min-h-[48px] text-sm resize-none flex-1"
-                      rows={2}
-                      autoFocus
-                    />
-                    <Button
-                      size="sm"
-                      disabled={!opinionText.trim() || submittingOpinion}
-                      onClick={handleSubmitOpinion}
-                      className="self-end shrink-0 gap-1"
-                    >
-                      {submittingOpinion ? <Loader2 className="h-3 w-3 animate-spin" /> : "✍️"} 등록
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 추가 질문 — 항상 보임 */}
-            <FollowUpInput
-              followUpText={followUpText}
-              setFollowUpText={setFollowUpText}
-              onSend={handleSendFollowUp}
-            />
-          </div>
+          {/* 추가 질문 */}
+          <FollowUpInput
+            followUpText={followUpText}
+            setFollowUpText={setFollowUpText}
+            onSend={handleSendFollowUp}
+          />
         </div>
       </div>
     );
@@ -570,76 +684,22 @@ export function ReviewGuide({
           </div>
         )}
 
-        {/* ── AI 오류 신고 ── */}
-        <AIErrorFeedback qaSetId={qaSet.id} onSubmitted={onOpinionSubmitted} />
+        {/* 💎 빈틈 채우기 (통합 모듈) */}
+        <GapFiller
+          qaSetId={qaSet.id}
+          onSubmitted={onOpinionSubmitted}
+          onShareQA={onShareQA}
+          userBalance={userBalance}
+          originalQuestion={qaSet.messages?.find(m => m.role === "user")?.content ?? qaSet.title ?? ""}
+          originalAnswer={qaSet.messages?.filter(m => m.role === "assistant").map(m => m.content).join("\n") ?? ""}
+        />
 
-        {/* ── 의견 + 추가질문 (항상 2컬럼, 독립 접근) ── */}
-        <div className="grid grid-cols-2 gap-3">
-          {/* 의견 */}
-          <div
-            className="rounded-xl border p-3 transition-all cursor-pointer hover:border-primary/30"
-            onClick={() => !expandOpinion && setExpandOpinion(true)}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-base">✍️</span>
-                <span className="text-sm font-medium">내 의견 추가</span>
-              </div>
-              {opinionDone && (
-                <Badge variant="outline" className="text-[10px] border-green-300 text-green-600">등록됨 ✓</Badge>
-              )}
-            </div>
-            {!expandOpinion && (
-              <p className="text-[11px] text-muted-foreground mt-1">
-                경험, 반박, 보충 근거를 지식맵에 연결
-              </p>
-            )}
-            {expandOpinion && (
-              <div className="mt-3 space-y-2.5" onClick={(e) => e.stopPropagation()}>
-                <div className="flex gap-1.5 flex-wrap">
-                  {OPINION_RELATIONS.map((rel) => (
-                    <button
-                      key={rel.value}
-                      onClick={() => setOpinionRelation(rel.value)}
-                      className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${
-                        opinionRelation === rel.value
-                          ? "border-primary bg-primary/10 text-primary font-medium"
-                          : "border-border text-muted-foreground hover:border-primary/40"
-                      }`}
-                    >
-                      {rel.icon} {rel.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <Textarea
-                    placeholder="의견을 작성하세요..."
-                    value={opinionText}
-                    onChange={(e) => setOpinionText(e.target.value.slice(0, 1000))}
-                    className="min-h-[48px] text-sm resize-none flex-1"
-                    rows={2}
-                    autoFocus
-                  />
-                  <Button
-                    size="sm"
-                    disabled={!opinionText.trim() || submittingOpinion}
-                    onClick={handleSubmitOpinion}
-                    className="self-end shrink-0 gap-1"
-                  >
-                    {submittingOpinion ? <Loader2 className="h-3 w-3 animate-spin" /> : "✍️"} 등록
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 추가 질문 — 항상 보임 (의견 펼쳐도 독립) */}
-          <FollowUpInput
-            followUpText={followUpText}
-            setFollowUpText={setFollowUpText}
-            onSend={handleSendFollowUp}
-          />
-        </div>
+        {/* 추가 질문 */}
+        <FollowUpInput
+          followUpText={followUpText}
+          setFollowUpText={setFollowUpText}
+          onSend={handleSendFollowUp}
+        />
       </div>
     </div>
   );
